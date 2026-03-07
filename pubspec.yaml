@@ -1,0 +1,35 @@
+name: frappedollars
+description: A new Flutter project for MT5 Copy Trading.
+publish_to: 'none'
+version: 1.1.0+2
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.2
+  supabase_flutter: ^2.0.0
+  provider: ^6.1.1
+  intl: ^0.18.1
+  logger: ^2.0.2
+  flutter_secure_storage: ^9.0.0
+  http: ^1.1.0
+  firebase_core: ^4.5.0
+  firebase_messaging: ^16.1.2
+  flutter_local_notifications: ^20.1.0
+  flutterwave_standard: ^1.0.8
+  fl_chart: ^0.66.0 # Pour les graphiques interactifs
+  local_auth: ^2.1.6 # Pour la biométrie (Empreinte/FaceID)
+  share_plus: ^7.2.1 # Pour partager le code de parrainage
+  uuid: ^4.2.1
+  url_launcher: ^6.2.5
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^2.0.0
+
+flutter:
+  uses-material-design: true

@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: frappedollars-backend
+    env: python
+    buildCommand: "pip install -r backend/requirements.txt"
+    startCommand: "uvicorn main:app --host=0.0.0.0 --port=10000"
+    workingDir: backend
+    autoDeploy: true
+    envVars:
+      - key: SUPABASE_URL
+        value: https://lllkrhivavsujgcfhcls.supabase.co
+      - key: SUPABASE_KEY
+        value: sb_publishable_SA2ex7Iy0bUPvowzcHyJNg_e5EPBdiH
