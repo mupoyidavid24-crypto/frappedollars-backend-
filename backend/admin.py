@@ -1,3 +1,11 @@
+from fastapi import APIRouter, Depends, HTTPException
+import os
+import requests
+from supabase import create_client
+from typing import List
+from config import supabase, get_current_admin
+router = APIRouter()
+
 @router.post("/add_payment_method")
 def add_payment_method(method: dict, admin=Depends(get_current_admin)):
     res = supabase.table("payment_methods").insert(method).execute()
@@ -10,9 +18,6 @@ def block_user(user_id: str, admin=Depends(get_current_admin)):
         raise HTTPException(status_code=403, detail="Impossible de bloquer un VIP ou un ADMIN")
     updated = supabase.table("profiles").update({"role": "SUSPENDED"}).eq("id", user_id).execute()
     return {"status": "bloqué"}
-from fastapi import APIRouter, Depends, HTTPException
-router = APIRouter(prefix="/admin")
-
 @router.post("/add_vip_client")
 def add_vip_client(data: dict, admin=Depends(get_current_admin)):
     # data doit contenir l'id du client
@@ -51,11 +56,12 @@ def get_copytrading_history(admin=Depends(get_current_admin)):
 from fastapi import APIRouter, HTTPException, Depends
 from supabase import create_client
 from typing import List
-from .config import supabase, get_current_admin
+from config import supabase, get_current_admin
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 from fastapi import APIRouter, Depends, HTTPException
-router = APIRouter(prefix="/admin")
+import os
+router = APIRouter(prefix="/admin", tags=["admin"])
 
 @router.post("/add_payment_method")
 def add_payment_method(method: dict, admin=Depends(get_current_admin)):
@@ -172,6 +178,9 @@ def send_notification(data: dict, admin=Depends(get_current_admin)):
     token_res = supabase.table("profiles").select("fcm_token").eq("id", user_id).execute()
     fcm_token = token_res.data[0]["fcm_token"] if token_res.data and token_res.data[0].get("fcm_token") else None
     # Envoyer la notification push via FCM
+    from fastapi import APIRouter, Depends, HTTPException
+    import os
+    router = APIRouter(prefix="/admin", tags=["admin"])
     if fcm_token and FCM_SERVER_KEY:
         fcm_payload = {
             "to": fcm_token,
