@@ -12,8 +12,6 @@ def block_user(user_id: str, admin=Depends(get_current_admin)):
     return {"status": "bloqué"}
 from fastapi import APIRouter, Depends, HTTPException
 router = APIRouter(prefix="/admin")
-from fastapi import APIRouter, Depends, HTTPException
-router = APIRouter(prefix="/admin")
 
 @router.post("/add_vip_client")
 def add_vip_client(data: dict, admin=Depends(get_current_admin)):
@@ -56,6 +54,8 @@ from typing import List
 from .config import supabase, get_current_admin
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+from fastapi import APIRouter, Depends, HTTPException
+router = APIRouter(prefix="/admin")
 
 @router.post("/add_payment_method")
 def add_payment_method(method: dict, admin=Depends(get_current_admin)):
