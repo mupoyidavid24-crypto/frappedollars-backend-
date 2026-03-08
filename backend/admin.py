@@ -10,6 +10,10 @@ def block_user(user_id: str, admin=Depends(get_current_admin)):
         raise HTTPException(status_code=403, detail="Impossible de bloquer un VIP ou un ADMIN")
     updated = supabase.table("profiles").update({"role": "SUSPENDED"}).eq("id", user_id).execute()
     return {"status": "bloqué"}
+from fastapi import APIRouter, Depends, HTTPException
+router = APIRouter(prefix="/admin")
+from fastapi import APIRouter, Depends, HTTPException
+router = APIRouter(prefix="/admin")
 
 @router.post("/add_vip_client")
 def add_vip_client(data: dict, admin=Depends(get_current_admin)):
