@@ -2,12 +2,16 @@ import 'package:flutter/material.dart';
 import 'logs_admin_service.dart';
 
 class AdminLogsScreen extends StatefulWidget {
+  const AdminLogsScreen({Key? key}) : super(key: key);
+
   @override
   _AdminLogsScreenState createState() => _AdminLogsScreenState();
 }
 
+class _AdminLogsScreenState extends State<AdminLogsScreen> {
   List<Map<String, dynamic>> logs = [];
   bool loading = false;
+
   void fetchLogs() async {
     setState(() { loading = true; });
     try {
@@ -15,7 +19,9 @@ class AdminLogsScreen extends StatefulWidget {
       setState(() { logs = result; loading = false; });
     } catch (e) {
       setState(() { loading = false; });
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur chargement logs')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Erreur chargement logs'))
+      );
     }
   }
 
@@ -28,19 +34,19 @@ class AdminLogsScreen extends StatefulWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Journalisation Admin')),
+      appBar: AppBar(title: const Text('Journalisation Admin')),
       body: loading
-          ? Center(child: CircularProgressIndicator())
+          ? const Center(child: CircularProgressIndicator())
           : logs.isEmpty
-              ? Center(child: Text('Aucun log'))
+              ? const Center(child: Text('Aucun log'))
               : ListView.builder(
                   itemCount: logs.length,
                   itemBuilder: (context, index) {
                     final l = logs[index];
                     return Card(
-                      margin: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
                       child: ListTile(
-                        leading: Icon(Icons.list_alt),
+                        leading: const Icon(Icons.list_alt),
                         title: Text('Action: ${l['action']}'),
                         subtitle: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,

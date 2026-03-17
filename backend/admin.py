@@ -1,9 +1,19 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, FastAPI
 import os
 import requests
 from supabase import create_client
 from typing import List
-from config import supabase, get_current_admin
+from backend.config import supabase, get_current_admin
+
+router = APIRouter()
+
+# --- Ajout pour permettre le lancement avec Uvicorn ---
+app = FastAPI()
+app.include_router(router)
+import requests
+from supabase import create_client
+from typing import List
+from backend.config import supabase, get_current_admin
 router = APIRouter()
 
 @router.post("/add_payment_method")
@@ -56,7 +66,7 @@ def get_copytrading_history(admin=Depends(get_current_admin)):
 from fastapi import APIRouter, HTTPException, Depends
 from supabase import create_client
 from typing import List
-from config import supabase, get_current_admin
+from backend.config import supabase, get_current_admin
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 from fastapi import APIRouter, Depends, HTTPException
@@ -144,6 +154,22 @@ def validate_payment(payment_id: str, admin=Depends(get_current_admin)):
     updated = supabase.table("payments").update({"status": "VALIDATED"}).eq("id", payment_id).execute()
     if not updated.data:
         raise HTTPException(status_code=404, detail="Paiement introuvable")
+    # Récupérer l'utilisateur et le montant du paiement
+    payment = supabase.table("payments").select("user_id, amount").eq("id", payment_id).maybe_single().execute()
+    if payment.data:
+        user_id = payment.data.get("user_id")
+        amount = payment.data.get("amount")
+        # Créer et envoyer la notification
+        notif_data = {
+            "user_id": user_id,
+            "title": "Paiement validé",
+            "message": f"Votre paiement de {amount}$ a été validé. Merci !",
+            "priority": "HIGH"
+        }
+        try:
+            send_notification(notif_data, admin)
+        except Exception as e:
+            print(f"Erreur notification paiement: {e}")
     return {"status": "validé"}
     try:
         updated = supabase.table("payments").update({"status": "VALIDATED"}).eq("id", payment_id).execute()

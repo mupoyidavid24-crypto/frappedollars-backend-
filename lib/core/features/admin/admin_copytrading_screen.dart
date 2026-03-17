@@ -2,13 +2,17 @@ import 'package:flutter/material.dart';
 import 'copytrading_admin_service.dart';
 
 class AdminCopyTradingScreen extends StatefulWidget {
+  const AdminCopyTradingScreen({Key? key}) : super(key: key);
+
   @override
   _AdminCopyTradingScreenState createState() => _AdminCopyTradingScreenState();
 }
 
+class _AdminCopyTradingScreenState extends State<AdminCopyTradingScreen> {
   bool isActive = false;
   List<Map<String, dynamic>> history = [];
   bool loading = false;
+  final TextEditingController _clientIdController = TextEditingController();
 
   void toggleCopyTrading(String clientId) async {
     setState(() { loading = true; });
@@ -17,11 +21,16 @@ class AdminCopyTradingScreen extends StatefulWidget {
     if (ok) {
       setState(() { isActive = !isActive; });
       fetchHistory();
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Copy trading synchronisé')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Copy trading synchronisé'))
+      );
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur synchronisation')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Erreur synchronisation'))
+      );
     }
   }
+
   void fetchHistory() async {
     setState(() { loading = true; });
     try {
@@ -29,7 +38,9 @@ class AdminCopyTradingScreen extends StatefulWidget {
       setState(() { history = result; loading = false; });
     } catch (e) {
       setState(() { loading = false; });
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur chargement historique')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Erreur chargement historique'))
+      );
     }
   }
 
@@ -42,26 +53,45 @@ class AdminCopyTradingScreen extends StatefulWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Copy Trading')), 
+      appBar: AppBar(title: const Text('Copy Trading')),
       body: loading
-          ? Center(child: CircularProgressIndicator())
+          ? const Center(child: CircularProgressIndicator())
           : Column(
               children: [
-                SwitchListTile(
-                  title: Text('Statut Copy Trading'),
-                  value: isActive,
-                  onChanged: (val) => toggleCopyTrading('client_id'), // Remplacer par l'ID réel
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: TextField(
+                    controller: _clientIdController,
+                    decoration: const InputDecoration(
+                      labelText: 'ID du client à synchroniser',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
                 ),
-                Divider(),
+                SwitchListTile(
+                  title: const Text('Statut Copy Trading'),
+                  value: isActive,
+                  onChanged: (val) {
+                    final clientId = _clientIdController.text.trim();
+                    if (clientId.isNotEmpty) {
+                      toggleCopyTrading(clientId);
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Veuillez saisir un ID client valide')),
+                      );
+                    }
+                  },
+                ),
+                const Divider(),
                 Expanded(
                   child: history.isEmpty
-                      ? Center(child: Text('Aucun historique'))
+                      ? const Center(child: Text('Aucun historique'))
                       : ListView.builder(
                           itemCount: history.length,
                           itemBuilder: (context, index) {
                             final h = history[index];
                             return ListTile(
-                              leading: Icon(Icons.sync_alt),
+                              leading: const Icon(Icons.sync_alt),
                               title: Text(h['action'] ?? ''),
                               subtitle: Text('Date: ${h['date']}'),
                             );
@@ -70,12 +100,6 @@ class AdminCopyTradingScreen extends StatefulWidget {
                 ),
               ],
             ),
-                      );
-                    },
-                  ),
-          ),
-        ],
-      ),
     );
   }
 }

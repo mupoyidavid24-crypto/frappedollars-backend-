@@ -1,6 +1,6 @@
 import 'package:local_auth/local_auth.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/foundation.dart';
+
 
 class BioAuthService {
   final LocalAuthentication _auth = LocalAuthentication();
@@ -9,7 +9,7 @@ class BioAuthService {
     try {
       return await _auth.canCheckBiometrics || await _auth.isDeviceSupported();
     } on PlatformException catch (e) {
-      debugPrint(e.toString());
+      print(e.toString());
       return false;
     }
   }
@@ -24,7 +24,7 @@ class BioAuthService {
         ),
       );
     } on PlatformException catch (e) {
-      debugPrint(e.toString());
+      print(e.toString());
       return false;
     }
   }

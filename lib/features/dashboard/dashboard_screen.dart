@@ -316,7 +316,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 color: isActive ? Colors.green : Colors.orange,
               ),
               title: const Text('Abonnement Copy Trading'),
-              subtitle: Text(isActive ? 'Actif' : (sub?.status.name == 'weekly_limit_reached' ? 'Limite 204\$ atteinte' : 'Inactif ou expiré')),
+              subtitle: Text(isActive ? 'Actif' : (sub?.status.name == 'weekly_limit_reached' ? 'Limite 250\$ atteinte' : 'Inactif ou expiré')),
             ),
             if (!isActive && sub?.status.name != 'weekly_limit_reached')
               Padding(
@@ -324,7 +324,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 child: ElevatedButton(
                   onPressed: () => _paymentService.handlePayment(
                     context: context,
-                    amount: 30.0,
+                    amount: 50.0,
                     type: "COPY_TRADING_WEEKLY",
                   ),
                   style: ElevatedButton.styleFrom(
@@ -332,7 +332,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     foregroundColor: Colors.white,
                     minimumSize: const Size(double.infinity, 45),
                   ),
-                  child: const Text('PAYER L\'ABONNEMENT TRADING (30\$)'),
+                  child: const Text('PAYER L\'ABONNEMENT TRADING (50\$)'),
                 ),
               ),
             if (needsVps && !isActive)
@@ -403,7 +403,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     .downloadEa(account.mt5Login, userId);
                 if (url != null && context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Lien de téléchargement généré.')),
+                    const SnackBar(content: Text('Lien de téléchargement généré.')),
                   );
                   // Ouvre le lien dans le navigateur
                   await launchUrl(Uri.parse(url));

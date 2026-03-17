@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'vip_admin_service.dart';
 
 class AdminVIPScreen extends StatefulWidget {
+  const AdminVIPScreen({Key? key}) : super(key: key);
+
   @override
   _AdminVIPScreenState createState() => _AdminVIPScreenState();
 }
 
+class _AdminVIPScreenState extends State<AdminVIPScreen> {
   List<Map<String, dynamic>> vipUsers = [];
   bool loading = false;
 
@@ -15,11 +18,16 @@ class AdminVIPScreen extends StatefulWidget {
     setState(() { loading = false; });
     if (ok) {
       fetchVIPUsers();
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(isVIP ? 'VIP activé' : 'VIP désactivé')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(isVIP ? 'VIP activé' : 'VIP désactivé'))
+      );
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur VIP')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Erreur VIP'))
+      );
     }
   }
+
   void fetchVIPUsers() async {
     setState(() { loading = true; });
     try {
@@ -27,7 +35,9 @@ class AdminVIPScreen extends StatefulWidget {
       setState(() { vipUsers = result; loading = false; });
     } catch (e) {
       setState(() { loading = false; });
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur chargement VIP')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Erreur chargement VIP'))
+      );
     }
   }
 
@@ -40,17 +50,17 @@ class AdminVIPScreen extends StatefulWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Gestion VIP')),
+      appBar: AppBar(title: const Text('Gestion VIP')),
       body: loading
-          ? Center(child: CircularProgressIndicator())
+          ? const Center(child: CircularProgressIndicator())
           : vipUsers.isEmpty
-              ? Center(child: Text('Aucun VIP'))
+              ? const Center(child: Text('Aucun VIP'))
               : ListView.builder(
                   itemCount: vipUsers.length,
                   itemBuilder: (context, index) {
                     final u = vipUsers[index];
                     return Card(
-                      margin: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
                       child: ListTile(
                         leading: Icon(Icons.star, color: u['is_vip'] ? Colors.amber : Colors.grey),
                         title: Text(u['full_name'] ?? ''),
@@ -64,12 +74,12 @@ class AdminVIPScreen extends StatefulWidget {
                         ),
                         trailing: Switch(
                           value: u['is_vip'] ?? false,
-                      onChanged: (val) => toggleVIP(u['id'], val),
-                    ),
-                  ),
-                );
-              },
-            ),
+                          onChanged: (val) => toggleVIP(u['id'], val),
+                        ),
+                      ),
+                    );
+                  },
+                ),
     );
   }
 }

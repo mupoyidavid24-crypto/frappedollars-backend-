@@ -40,13 +40,14 @@ class SupabaseService {
 
   Future<TradingAccount?> getTradingAccount(String userId) async {
     final response = await _client
-        .from('trading_accounts')
-        .select()
-        .eq('user_id', userId)
-        .maybeSingle();
-    
-    if (response == null) return null;
-    return TradingAccount.fromJson(response);
+      .from('trading_accounts')
+      .select()
+      .eq('user_id', userId)
+      .order('created_at', ascending: false)
+      .limit(1);
+    if (response == null || (response is List && response.isEmpty)) return null;
+    final data = response is List ? response.first : response;
+    return TradingAccount.fromJson(data);
   }
 
   Future<void> saveTradingAccount(TradingAccount account) async {
@@ -57,15 +58,14 @@ class SupabaseService {
 
   Future<Subscription?> getSubscription(String userId) async {
     final response = await _client
-        .from('subscriptions')
-        .select()
-        .eq('user_id', userId)
-        .order('created_at', ascending: false)
-        .limit(1)
-        .maybeSingle();
-    
-    if (response == null) return null;
-    return Subscription.fromJson(response);
+      .from('subscriptions')
+      .select()
+      .eq('user_id', userId)
+      .order('created_at', ascending: false)
+      .limit(1);
+    if (response == null || (response is List && response.isEmpty)) return null;
+    final data = response is List ? response.first : response;
+    return Subscription.fromJson(data);
   }
 
   // -- TRADES --

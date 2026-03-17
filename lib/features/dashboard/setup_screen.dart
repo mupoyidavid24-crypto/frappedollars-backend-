@@ -25,7 +25,7 @@ class _SetupScreenState extends State<SetupScreen> {
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const DashboardScreen()),
+        MaterialPageRoute(builder: (context) => DashboardScreen()),
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -88,7 +88,7 @@ class _SetupScreenState extends State<SetupScreen> {
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: highlight ? const Color(AppConstants.primaryColor).withValues(255, 255, 255, 100) : Colors.white10,
+          color: highlight ? const Color(AppConstants.primaryColor).withValues(red: 255, green: 255, blue: 255, alpha: 100) : Colors.white10,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: highlight ? const Color(AppConstants.primaryColor) : Colors.white24,

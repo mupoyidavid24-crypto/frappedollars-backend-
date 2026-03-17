@@ -1,4 +1,6 @@
+
 import 'package:flutter/material.dart';
+import 'package:frappedollars/firebase_options.dart';
 import 'admin_dashboard_screen.dart';
 import 'admin_payments_screen.dart';
 import 'admin_notifications_screen.dart';
@@ -11,16 +13,20 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   await Supabase.initialize(
     url: 'YOUR_SUPABASE_URL',
     anonKey: 'YOUR_SUPABASE_KEY',
   );
-  runApp(AdminApp());
+  runApp(const AdminApp());
   setupFCM();
 }
 
 class AdminApp extends StatelessWidget {
+  const AdminApp({Key? key}) : super(key: key);
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -30,10 +36,10 @@ class AdminApp extends StatelessWidget {
       routes: {
         '/admin/dashboard': (context) => AdminDashboardScreen(),
         '/admin/payments': (context) => AdminPaymentsScreen(),
-        '/admin/notifications': (context) => AdminNotificationsScreen(),
-        '/admin/vip': (context) => AdminVIPScreen(),
-        '/admin/copytrading': (context) => AdminCopyTradingScreen(),
-        '/admin/logs': (context) => AdminLogsScreen(),
+        '/admin/notifications': (context) => const AdminNotificationsScreen(),
+        '/admin/vip': (context) => const AdminVIPScreen(),
+        '/admin/copytrading': (context) => const AdminCopyTradingScreen(),
+        '/admin/logs': (context) => const AdminLogsScreen(),
       },
     );
   }
@@ -47,8 +53,7 @@ void setupFCM() async {
     await Supabase.instance.client
       .from('profiles')
       .update({'fcm_token': token})
-      .eq('id', 'USER_ID') // Remplacer par l'ID utilisateur
-      .execute();
+      .eq('id', 'USER_ID'); // Remplacer par l'ID utilisateur
   }
 
   FirebaseMessaging.onMessage.listen((RemoteMessage message) {

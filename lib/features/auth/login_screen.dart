@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/constants/constants.dart';
 import 'auth_provider.dart';
+
+import '../dashboard/dashboard_screen.dart';
 import 'register_screen.dart';
-import '../admin/admin_dashboard_screen.dart';
+
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -44,11 +46,15 @@ class _LoginScreenState extends State<LoginScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Connexion réussie !')),
       );
-      // Navigation vers Dashboard sera ajoutée ici
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => DashboardScreen()),
+      );
     } else {
+      final errorMsg = authProvider.loginError ?? 'Échec de la connexion. Vérifiez vos identifiants.';
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Échec de la connexion. Vérifiez vos identifiants.'),
+        SnackBar(
+          content: Text(errorMsg),
           backgroundColor: Colors.red,
         ),
       );

@@ -5,7 +5,7 @@ import '../../models/subscription_model.dart';
 import '../../models/trade_model.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:url_launcher/url_launcher.dart';
+
 
 class DashboardProvider extends ChangeNotifier {
   final SupabaseService _supabaseService = SupabaseService();

@@ -1,75 +1,69 @@
+
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter/material.dart';
+
+final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
+
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp();
+}
 
 class NotificationService {
-  final FirebaseMessaging _fcm = FirebaseMessaging.instance;
-  final FlutterLocalNotificationsPlugin _localNotificationsPlugin =
-      FlutterLocalNotificationsPlugin();
-
   Future<void> init() async {
-    // 1. Request Permission
-    NotificationSettings settings = await _fcm.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-      // Ajout d'autres paramètres nommés si requis
-    );
-
+    // 1. Initialisation Firebase Messaging
+    await Firebase.initializeApp();
+    NotificationSettings settings = await FirebaseMessaging.instance.requestPermission();
     if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-      // 2. Get Token
-      String? token = await _fcm.getToken();
+      // 2. Enregistrement du token FCM dans Supabase
+      String? token = await FirebaseMessaging.instance.getToken();
       if (token != null) {
-        await _saveTokenToSupabase(token);
+        final userId = Supabase.instance.client.auth.currentUser?.id;
+        if (userId != null) {
+          await Supabase.instance.client
+              .from('profiles')
+              .update({'fcm_token': token})
+              .eq('id', userId);
+        }
       }
-
-      // 3. Listen for token refreshes
-      _fcm.onTokenRefresh.listen(_saveTokenToSupabase);
+      // 3. Rafraîchissement du token
+      FirebaseMessaging.instance.onTokenRefresh.listen((token) async {
+        final userId = Supabase.instance.client.auth.currentUser?.id;
+        if (userId != null) {
+          await Supabase.instance.client
+              .from('profiles')
+              .update({'fcm_token': token})
+              .eq('id', userId);
+        }
+      });
     }
 
-    // 4. Initialize Local Notifications (for foreground messages)
-    const AndroidInitializationSettings initializationSettingsAndroid =
-      AndroidInitializationSettings('@mipmap/ic_launcher');
-    const InitializationSettings initializationSettings =
-      InitializationSettings(android: initializationSettingsAndroid);
-    await _localNotificationsPlugin.initialize(
-      initializationSettings,
-      // settings: settings, // Ajout de l’argument settings si requis par la version
-      // Ajout du paramètre 'onSelectNotification' si nécessaire
-    );
+    // 4. Initialisation notifications locales (Android/iOS/Web)
+    // Initialisation notifications locales (Web: aucun argument, Mobile: settings)
+    // ignore: undefined_prefixed_name
+    const AndroidInitializationSettings initializationSettingsAndroid = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const InitializationSettings initializationSettings = InitializationSettings(android: initializationSettingsAndroid);
+    bool isWeb = identical(0, 0.0);
+    await flutterLocalNotificationsPlugin.initialize(settings: initializationSettings);
 
-    // 5. Handle Foreground Messages
+    // 5. Notifications en premier plan
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      _showLocalNotification(message);
+      RemoteNotification? notification = message.notification;
+      if (notification != null) {
+        flutterLocalNotificationsPlugin.show(
+          id: notification.hashCode,
+          title: notification.title,
+          body: notification.body,
+          notificationDetails: NotificationDetails(
+            android: AndroidNotificationDetails('default_channel', 'Notifications'),
+          ),
+        );
+      }
     });
-  }
 
-  Future<void> _saveTokenToSupabase(String token) async {
-    final userId = Supabase.instance.client.auth.currentUser?.id;
-    if (userId != null) {
-      await Supabase.instance.client
-          .from('profiles')
-          .update({'fcm_token': token})
-          .eq('id', userId);
-    }
-  }
-
-  void _showLocalNotification(RemoteMessage message) {
-    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      'trades_channel',
-      'Alertes Trading',
-      channelDescription: 'Notifications pour les trades et abonnements',
-      importance: Importance.max,
-      priority: Priority.high,
-    );
-    const NotificationDetails platformDetails =
-        NotificationDetails(android: androidDetails);
-
-    _localNotificationsPlugin.show(
-      id: 0,
-      title: message.notification?.title ?? "FrappedDollars",
-      body: message.notification?.body ?? "",
-      notificationDetails: platformDetails,
-    );
+    // 6. Notifications en arrière-plan
+    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
   }
 }

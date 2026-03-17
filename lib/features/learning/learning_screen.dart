@@ -38,7 +38,7 @@ class LearningScreen extends StatelessWidget {
                     Container(
                       height: 150,
                       width: double.infinity,
-                      color: const Color(AppConstants.primaryColor).withValues(255, 255, 255, 100),
+                      color: const Color(AppConstants.primaryColor).withValues(red: 255, green: 255, blue: 255, alpha: 100),
                       child: const Icon(Icons.play_circle_fill, size: 60, color: Colors.white),
                     ),
                     Padding(

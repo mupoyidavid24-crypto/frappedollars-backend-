@@ -26,19 +26,28 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  String? _loginError;
+  String? get loginError => _loginError;
+
   Future<bool> login(String email, String password) async {
     _setLoading(true);
+    _loginError = null;
     try {
       final response = await _supabaseService.signIn(email, password);
       if (response.user != null) {
         _userProfile = await _supabaseService.getUserProfile(response.user!.id);
         notifyListeners();
         return true;
+      } else {
+        _loginError = "Identifiants invalides ou connexion échouée.";
+        debugPrint("Login Error: ${_loginError}");
       }
     } catch (e) {
+      _loginError = e.toString();
       debugPrint("Login Error: $e");
     } finally {
       _setLoading(false);
+      notifyListeners();
     }
     return false;
   }

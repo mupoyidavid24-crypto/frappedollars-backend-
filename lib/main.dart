@@ -1,15 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
+
 import 'core/constants/constants.dart';
 import 'features/auth/auth_provider.dart';
 import 'features/auth/login_screen.dart';
 import 'features/dashboard/dashboard_provider.dart';
 import 'features/dashboard/main_navigation_screen.dart';
+import 'core/services/notification_service.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   try {
     await Supabase.initialize(
       url: AppConstants.supabaseUrl,
@@ -18,6 +25,9 @@ void main() async {
   } catch (e) {
     debugPrint('Supabase Initialization Error: $e');
   }
+
+  // Initialisation notifications (toutes plateformes)
+  await NotificationService().init();
 
   runApp(
     MultiProvider(

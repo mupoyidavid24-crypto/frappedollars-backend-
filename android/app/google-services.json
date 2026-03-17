@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "460271892368",
+    "project_id": "frappe-dollars",
+    "storage_bucket": "frappe-dollars.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:460271892368:android:74664ac04bbf13d662a515",
+        "android_client_info": {
+          "package_name": "com.example.frappedollars"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBS3ti0P37xJ3f-vwYQWEsc0vECJYeM0rU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
