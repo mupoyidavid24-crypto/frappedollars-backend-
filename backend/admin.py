@@ -3,7 +3,7 @@ import os
 import requests
 from supabase import create_client
 from typing import List
-from backend.config import supabase, get_current_admin
+from .config import supabase, get_current_admin
 
 router = APIRouter()
 
