@@ -10,3 +10,5 @@ services:
         value: https://lllkrhivavsujgcfhcls.supabase.co
       - key: SUPABASE_KEY
         value: sb_publishable_SA2ex7Iy0bUPvowzcHyJNg_e5EPBdiH
+      - key: PYTHONPATH
+        value: .
