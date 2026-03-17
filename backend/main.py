@@ -12,7 +12,7 @@ import os
 from dotenv import load_dotenv
 from typing import Optional
 from datetime import datetime, timedelta
-from .config import PRICES, WEEKLY_PROFIT_LIMIT, MIN_CAPITAL_REQUIRED
+from config import PRICES, WEEKLY_PROFIT_LIMIT, MIN_CAPITAL_REQUIRED
 from .admin import router as admin_router
 
 load_dotenv()
