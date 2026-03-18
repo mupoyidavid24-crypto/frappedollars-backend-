@@ -4,6 +4,8 @@ Backend FrappedDollars API
 Ce fichier initialise l'application FastAPI, configure Supabase, et inclut le module admin.
 Toutes les routes principales et la logique d'intégration sont centralisées ici.
 """
+import sys
+print("[BOOT] Backend démarré", file=sys.stderr, flush=True)
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -41,13 +43,15 @@ class MasterTrade(BaseModel):
     tp: Optional[float] = None
     sl: Optional[float] = None
     action: str = "OPEN"
+
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 # Handler pour loguer les erreurs de validation 422
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request, exc):
-    print("[VALIDATION ERROR]", exc.errors())
+    import sys
+    print("VALIDATION ERROR:", exc.errors(), file=sys.stderr, flush=True)
     return JSONResponse(status_code=422, content={"detail": exc.errors()})
 
 class ClientTradeUpdate(BaseModel):
@@ -58,6 +62,8 @@ class ClientTradeUpdate(BaseModel):
 
 @app.post("/master/trade")
 async def handle_master_trade(trade: MasterTrade):
+        import sys
+        print("[POST /master/trade] Reçu", file=sys.stderr, flush=True)
     master_acc = supabase.table("trading_accounts").select("id, balance").eq("mt5_login", trade.master_login).eq("account_type", "MASTER").execute()
     if not master_acc.data:
         raise HTTPException(status_code=404, detail="Master account not found")
