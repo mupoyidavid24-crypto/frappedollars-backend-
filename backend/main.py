@@ -27,6 +27,11 @@ app.add_middleware(
     allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Handler pour loguer les erreurs de validation 422
+@app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     import sys
     print("🚨 VALIDATION ERROR:", exc.errors(), file=sys.stderr, flush=True)
@@ -34,8 +39,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         status_code=422,
         content={"detail": exc.errors()},
     )
-    allow_headers=["*"],
-)
+
 app.include_router(admin_router, prefix="/admin")
 
 url: str = os.getenv("SUPABASE_URL")
