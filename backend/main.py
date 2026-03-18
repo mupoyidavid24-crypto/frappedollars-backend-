@@ -1,3 +1,29 @@
+import sys
+print("[BOOT] Backend démarré", file=sys.stderr, flush=True)
+from fastapi import FastAPI, Request, HTTPException
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from supabase import create_client, Client
+import os
+from dotenv import load_dotenv
+from typing import Optional
+from datetime import datetime, timedelta
+from backend.config import PRICES, WEEKLY_PROFIT_LIMIT, MIN_CAPITAL_REQUIRED
+from backend.admin import router as admin_router
+
+load_dotenv()
+
+app = FastAPI(title="FrappedDollars API")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Endpoint de test de vie
 @app.get("/ping")
 async def ping():
