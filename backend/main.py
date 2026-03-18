@@ -62,8 +62,9 @@ class ClientTradeUpdate(BaseModel):
 
 @app.post("/master/trade")
 async def handle_master_trade(trade: MasterTrade):
-        import sys
-        print("[POST /master/trade] Reçu", file=sys.stderr, flush=True)
+    import sys
+    print("[POST /master/trade] Reçu", file=sys.stderr, flush=True)
+    # tout le reste du code est déjà bien indenté à 4 espaces
     master_acc = supabase.table("trading_accounts").select("id, balance").eq("mt5_login", trade.master_login).eq("account_type", "MASTER").execute()
     if not master_acc.data:
         raise HTTPException(status_code=404, detail="Master account not found")
