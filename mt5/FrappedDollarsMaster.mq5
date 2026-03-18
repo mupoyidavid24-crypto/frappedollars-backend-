@@ -9,7 +9,7 @@
 #property strict
 
 //--- Input parameters
-input string   InpBackendUrl   = "http://VOTRE_IP_VPS:8000";
+input string   InpBackendUrl   = "https://frappedollars-backend-1.onrender.com";
 input string   InpMasterLogin  = "12345678";
 
 //--- Globals

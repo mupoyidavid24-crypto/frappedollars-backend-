@@ -11,7 +11,7 @@
 #include <Trade\Trade.mqh>
 
 //--- Input parameters
-input string   InpBackendUrl   = "https://ton-backend.onrender.com"; // URL du Backend (à personnaliser après déploiement)
+input string   InpBackendUrl   = "https://frappedollars-backend-1.onrender.com"; // URL du Backend (prod Render)
 input string   InpClientLogin  = "87654321";                 // Votre Login MT5
 input string   InpAllowedLogin = "32048608";                 // Login MT5 autorisé
 input int      InpTimerSeconds = 2;                          // Vérification toutes les 2 sec
