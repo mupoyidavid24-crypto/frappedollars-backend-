@@ -1,4 +1,4 @@
-print("\ud83d\udd25 VERSION BACKEND V2 ACTIVE")
+print("VERSION BACKEND V2 ACTIVE")
 import sys
 print("[BOOT] Backend démarré", file=sys.stderr, flush=True)
 from fastapi import FastAPI, Request, HTTPException
