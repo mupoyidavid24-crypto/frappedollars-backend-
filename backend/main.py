@@ -6,7 +6,9 @@ Toutes les routes principales et la logique d'intégration sont centralisées ic
 """
 import sys
 print("[BOOT] Backend démarré", file=sys.stderr, flush=True)
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Request, HTTPException
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from supabase import create_client, Client
@@ -25,6 +27,13 @@ app.add_middleware(
     allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    import sys
+    print("🚨 VALIDATION ERROR:", exc.errors(), file=sys.stderr, flush=True)
+    return JSONResponse(
+        status_code=422,
+        content={"detail": exc.errors()},
+    )
     allow_headers=["*"],
 )
 app.include_router(admin_router, prefix="/admin")
