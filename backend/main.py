@@ -1,3 +1,7 @@
+# Endpoint de test de vie
+@app.get("/ping")
+async def ping():
+    return {"ping": "pong"}
 """
 Backend FrappedDollars API
 -------------------------
