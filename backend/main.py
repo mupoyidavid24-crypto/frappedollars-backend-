@@ -38,9 +38,17 @@ class MasterTrade(BaseModel):
     trade_type: str
     volume: float
     open_price: float
-    tp: Optional[float] = 0.0
-    sl: Optional[float] = 0.0
+    tp: Optional[float] = None
+    sl: Optional[float] = None
     action: str = "OPEN"
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+
+# Handler pour loguer les erreurs de validation 422
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exc):
+    print("[VALIDATION ERROR]", exc.errors())
+    return JSONResponse(status_code=422, content={"detail": exc.errors()})
 
 class ClientTradeUpdate(BaseModel):
     copied_trade_id: str
