@@ -82,23 +82,33 @@ void SyncTrades()
 
 void SendToAPI(ulong ticket, string action)
 {
+
+   string symbol = "";
+   string trade_type = "";
+   double volume = 0;
+   double open_price = 0;
+   double tp = 0;
+   double sl = 0;
+
+   if(PositionSelectByTicket(ticket)) {
+      symbol = PositionGetString(POSITION_SYMBOL);
+      trade_type = (PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY)?"BUY":"SELL";
+      volume = PositionGetDouble(POSITION_VOLUME);
+      open_price = PositionGetDouble(POSITION_PRICE_OPEN);
+      tp = PositionGetDouble(POSITION_TP);
+      sl = PositionGetDouble(POSITION_SL);
+   }
+
    string json = "{";
    json += "\"master_login\":\"" + InpMasterLogin + "\",";
    json += "\"ticket_id\":\"" + IntegerToString(ticket) + "\",";
-   json += "\"action\":\"" + action + "\"";
-
-   if(action == "OPEN")
-   {
-      if(PositionSelectByTicket(ticket))
-      {
-         json += ",\"symbol\":\"" + PositionGetString(POSITION_SYMBOL) + "\"";
-         json += ",\"trade_type\":\"" + ((PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY)?"BUY":"SELL") + "\"";
-         json += ",\"volume\":" + DoubleToString(PositionGetDouble(POSITION_VOLUME), 2);
-         json += ",\"open_price\":" + DoubleToString(PositionGetDouble(POSITION_PRICE_OPEN), 5);
-         json += ",\"tp\":" + DoubleToString(PositionGetDouble(POSITION_TP), 5);
-         json += ",\"sl\":" + DoubleToString(PositionGetDouble(POSITION_SL), 5);
-      }
-   }
+   json += "\"action\":\"" + action + "\",";
+   json += "\"symbol\":\"" + symbol + "\",";
+   json += "\"trade_type\":\"" + trade_type + "\",";
+   json += "\"volume\":" + DoubleToString(volume, 2) + ",";
+   json += "\"open_price\":" + DoubleToString(open_price, 5) + ",";
+   json += "\"tp\":" + DoubleToString(tp, 5) + ",";
+   json += "\"sl\":" + DoubleToString(sl, 5);
    json += "}";
 
    char data[], result[];
