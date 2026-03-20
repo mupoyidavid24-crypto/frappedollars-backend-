@@ -1,3 +1,4 @@
+raise Exception("🔥 TEST SI CE CODE EST EXECUTE")
 print("VERSION BACKEND V2 ACTIVE")
 import sys
 print("[BOOT] Backend démarré", file=sys.stderr, flush=True)
