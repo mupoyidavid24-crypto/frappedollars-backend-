@@ -1,3 +1,19 @@
+// Fonction à appeler après exécution d’un trade pour confirmer au backend
+void ConfirmerExecutionTrade(string backendUrl, string client_login, string trade_id)
+{
+   string json = "{";
+   json += "\"client_login\":\"" + client_login + "\",";
+   json += "\"trade_id\":\"" + trade_id + "\"";
+   json += "}";
+   char data[], result[];
+   string headers = "Content-Type: application/json\r\n";
+   int jsonLen = StringLen(json);
+   ArrayResize(data, jsonLen);
+   StringToCharArray(json, data, 0, jsonLen, CP_UTF8);
+   int res = WebRequest("POST", backendUrl + "/client/trade_executed", headers, 1000, data, result, headers);
+   if(res==200) Print("Confirmation d’exécution envoyée pour le trade ", trade_id);
+   else Print("Erreur lors de la confirmation d’exécution : ", GetLastError());
+}
 //+------------------------------------------------------------------+
 //|                                         FrappedDollarsClient.mq5 |
 //|                                  Copyright 2024, FrappedDollars  |

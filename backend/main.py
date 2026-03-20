@@ -1,3 +1,18 @@
+# Endpoint pour confirmation d'exécution d'un trade par le client
+from fastapi.responses import JSONResponse
+
+@app.post("/client/trade_executed")
+async def trade_executed(request: Request):
+    data = await request.json()
+    client_login = data.get("client_login")
+    trade_id = data.get("trade_id")
+    if not client_login or not trade_id:
+        return JSONResponse({"error": "client_login et trade_id requis"}, status_code=400)
+    trades = pending_trades.get(client_login, [])
+    # Suppression du trade exécuté
+    new_trades = [t for t in trades if str(t.get("id")) != str(trade_id) and str(t.get("ticket_id")) != str(trade_id)]
+    pending_trades[client_login] = new_trades
+    return {"status": "ok", "removed": trade_id}
 
 
 
