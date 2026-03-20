@@ -1,14 +1,18 @@
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 
 app = FastAPI()
 
-print("BACKEND CLEAN START")
+@app.get("/")
+def root():
+    return {"message": "API OK"}
 
 @app.get("/ping")
 def ping():
     return {"ping": "pong"}
 
-@app.get("/")
-def root():
-    return {"status": "alive"}
+@app.post("/master/trade")
+async def master_trade(request: Request):
+    data = await request.json()
+    print("\ud83d\udd25 TRADE RECU:", data)
+    return {"status": "received", "data": data}
