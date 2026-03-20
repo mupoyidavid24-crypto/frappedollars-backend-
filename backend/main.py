@@ -1,7 +1,10 @@
 
 
+
 from fastapi import FastAPI, Request
 from typing import Dict, List
+import uuid
+import time
 
 # Stockage en mémoire : {login: [trades]}
 pending_trades: Dict[str, List[dict]] = {}
@@ -12,8 +15,21 @@ app = FastAPI()
 def client_pending_trades(mt5_login: str):
     print("CLIENT PENDING TRADES login:", mt5_login)
     trades = pending_trades.get(mt5_login, [])
-    # Pour tests, on laisse les trades dans la liste (pas de suppression)
-    return {"pending_trades": trades}
+    # Adapter chaque trade au format attendu par l'EA client
+    formatted = []
+    for t in trades:
+        formatted.append({
+            "id": t.get("id", t.get("ticket_id", str(uuid.uuid4()))),
+            "execution_status": t.get("execution_status", "PENDING"),
+            "symbol": t.get("symbol"),
+            "trade_type": t.get("trade_type"),
+            "volume_executed": t.get("volume"),
+            "sl": t.get("sl"),
+            "tp": t.get("tp"),
+            "client_ticket_id": t.get("client_ticket_id", ""),
+            "timestamp": t.get("timestamp", int(time.time())),
+        })
+    return {"pending_trades": formatted}
 
 @app.get("/")
 def root():
@@ -32,8 +48,15 @@ async def master_trade(request: Request):
     if not client_login:
         # Pour test, fallback sur un login de démo
         client_login = "87654321"
+    # Générer un id unique et enrichir le trade
+    trade_id = str(uuid.uuid4())
+    enriched = dict(data)
+    enriched["id"] = trade_id
+    enriched["execution_status"] = "PENDING"
+    enriched["volume_executed"] = data.get("volume")
+    enriched["timestamp"] = int(time.time())
     if client_login not in pending_trades:
         pending_trades[client_login] = []
-    pending_trades[client_login].append(data)
-    print(f"Trade ajouté à {client_login} :", data)
-    return {"status": "received", "data": data}
+    pending_trades[client_login].append(enriched)
+    print(f"Trade ajouté à {client_login} :", enriched)
+    return {"status": "received", "data": enriched}
