@@ -14,5 +14,5 @@ def ping():
 @app.post("/master/trade")
 async def master_trade(request: Request):
     data = await request.json()
-    print("\ud83d\udd25 TRADE RECU:", data)
+    print("TRADE RECU:", data)
     return {"status": "received", "data": data}
