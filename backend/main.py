@@ -1,11 +1,12 @@
-@app.get("/client/pending_trades/{mt5_login}")
-def client_pending_trades(mt5_login: str):
-    print("CLIENT PENDING TRADES login:", mt5_login)
-    return {}
 
 from fastapi import FastAPI, Request
 
 app = FastAPI()
+
+@app.get("/client/pending_trades/{mt5_login}")
+def client_pending_trades(mt5_login: str):
+    print("CLIENT PENDING TRADES login:", mt5_login)
+    return {}
 
 @app.get("/")
 def root():
