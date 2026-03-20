@@ -1,6 +1,8 @@
-# Endpoint pour confirmation d'exécution d'un trade par le client
-from fastapi.responses import JSONResponse
 
+from fastapi.responses import JSONResponse
+app = FastAPI()
+
+# Endpoint pour confirmation d'exécution d'un trade par le client
 @app.post("/client/trade_executed")
 async def trade_executed(request: Request):
     data = await request.json()
