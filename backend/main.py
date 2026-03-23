@@ -28,10 +28,15 @@ def monitoring_status():
 app.include_router(monitoring_router)
 
 async def verify_api_key(request: Request):
+    # Accepte Authorization: Bearer ... ou x-api-key
+    api_key = None
     auth = request.headers.get("authorization")
-    if not auth or not auth.startswith("Bearer "):
+    if auth and auth.startswith("Bearer "):
+        api_key = auth.split(" ", 1)[1]
+    else:
+        api_key = request.headers.get("x-api-key")
+    if not api_key:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing API key")
-    api_key = auth.split(" ", 1)[1]
     # Recherche du client_id associé à cette clé dans Supabase
     res = supabase.table("api_keys").select("client_id").eq("api_key", api_key).execute()
     if not res.data or len(res.data) == 0:
