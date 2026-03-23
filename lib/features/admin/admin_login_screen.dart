@@ -28,13 +28,19 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Icon(Icons.admin_panel_settings, size: 80, color: Colors.blueGrey),
+                const Icon(Icons.admin_panel_settings,
+                    size: 80, color: Colors.blueGrey),
                 const SizedBox(height: 24),
-                const Text('Espace Admin', textAlign: TextAlign.center, style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+                const Text('Espace Admin',
+                    textAlign: TextAlign.center,
+                    style:
+                        TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 48),
                 TextField(
                   controller: _usernameController,
-                  decoration: InputDecoration(labelText: 'Nom d’utilisateur', prefixIcon: Icon(Icons.person)),
+                  decoration: const InputDecoration(
+                      labelText: 'Nom d’utilisateur',
+                      prefixIcon: Icon(Icons.person)),
                 ),
                 const SizedBox(height: 16),
                 TextField(
@@ -42,10 +48,13 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                   obscureText: _obscurePassword,
                   decoration: InputDecoration(
                     labelText: 'Mot de passe',
-                    prefixIcon: Icon(Icons.lock_outline),
+                    prefixIcon: const Icon(Icons.lock_outline),
                     suffixIcon: IconButton(
-                      icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
-                      onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                      icon: Icon(_obscurePassword
+                          ? Icons.visibility_off
+                          : Icons.visibility),
+                      onPressed: () =>
+                          setState(() => _obscurePassword = !_obscurePassword),
                     ),
                   ),
                 ),

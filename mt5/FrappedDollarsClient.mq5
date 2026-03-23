@@ -28,27 +28,38 @@ void ConfirmerExecutionTrade(string backendUrl, string client_login, string trad
 
 //--- Input parameters
 input string   InpBackendUrl   = "https://frappedollars-backend-1.onrender.com"; // URL du Backend (prod Render)
-input string   InpClientLogin  = "87654321";                 // Votre Login MT5
-input string   InpAllowedLogin = "32048608";                 // Login MT5 autorisé
-input int      InpTimerSeconds = 2;                          // Vérification toutes les 2 sec
+input string   InpBroker       = "ICMarketsSC";               // Nom du broker (à renseigner)
+input string   InpServer       = "Demo";                      // Nom du serveur (à renseigner)
+input string   InpAccountType  = "LIVE";                      // Type de compte (LIVE/DEMO)
+input int      InpTimerSeconds = 2;                            // Vérification toutes les 2 sec
 
 //--- Globals
+//--- Globals
 CTrade         G_Trade;
+string         G_ClientId;
+
+//--- Journalisation locale (simple, à améliorer pour la prod)
+struct TradeJournalEntry {
+   string trade_id;
+   int sequence_id;
+   string action; // OPEN/CLOSE
+   string status; // PENDING/EXECUTED/FAILED
+   datetime timestamp;
+};
+TradeJournalEntry G_TradeJournal[1000]; // Simple buffer, à remplacer par fichier ou DB locale en prod
+int G_TradeJournalSize = 0;
 
 //+------------------------------------------------------------------+
 //| Expert initialization function                                   |
 //+------------------------------------------------------------------+
 int OnInit()
 {
-   Print("FrappedDollars Client EA v1.22 démarré pour le compte: ", InpClientLogin);
 
-   // Sécurisation : l'EA ne fonctionne que sur le compte autorisé
-   long allowedLogin = (long)StringToInteger(InpAllowedLogin); // conversion explicite
-   if (AccountInfoInteger(ACCOUNT_LOGIN) != allowedLogin) {
-      Alert("EA non autorisé pour ce compte.");
-      ExpertRemove();
-      return(INIT_FAILED);
-   }
+   // Génération dynamique du client_id
+   long login = AccountInfoInteger(ACCOUNT_LOGIN);
+   string login_str = IntegerToString(login);
+   G_ClientId = login_str + "_" + InpBroker + "_" + InpServer + "_" + InpAccountType;
+   Print("FrappedDollars Client EA v1.22 démarré pour le client_id: ", G_ClientId);
 
    if(!TerminalInfoInteger(74))
    {
@@ -72,7 +83,7 @@ void FetchAndExecute()
    uchar data[];
    uchar result[];
    string result_headers = "";
-   string url = InpBackendUrl + "/client/pending_trades/" + InpClientLogin;
+   string url = InpBackendUrl + "/client/pending_trades/" + G_ClientId;
 
    int res = WebRequest("GET", url, "", 1000, data, result, result_headers);
 
@@ -115,57 +126,106 @@ void ParseAndProcess(string json)
       double sl            = StringToDouble(ExtractValue(item, "\"sl\":"));
       double tp            = StringToDouble(ExtractValue(item, "\"tp\":"));
       string clientTicket  = ExtractValue(item, "\"client_ticket_id\":\"");
+      int sequence_id      = StringToInteger(ExtractValue(item, "\"sequence_id\":"));
+      string action        = ExtractValue(item, "\"action\":\""); // "OPEN" ou "CLOSE"
 
-      // --- ACTION : OUVERTURE ---
-      if(status == "PENDING")
+      // Vérification de l'ordre d'exécution (state machine simplifiée)
+      if(action == "OPEN")
       {
-         Print("Exécution d'une OUVERTURE : ", symbol, " ", type, " Vol:", volume);
+         // Vérifier si ce trade_id a déjà été exécuté (idempotence locale)
+         bool alreadyExecuted = false;
+         for(int j=0; j<G_TradeJournalSize; j++)
+            if(G_TradeJournal[j].trade_id == copiedTradeId && G_TradeJournal[j].action == "OPEN" && G_TradeJournal[j].status == "EXECUTED")
+               alreadyExecuted = true;
+         if(alreadyExecuted) continue;
 
+         // Exécution de l'OPEN
+         Print("[STATE] Tentative d'OPEN : ", symbol, " ", type, " Vol:", volume, " seq:", sequence_id);
          bool success = false;
          if(type == "BUY")
             success = G_Trade.Buy(volume, symbol, 0, sl, tp, "FrappedDollars Copy");
          else if(type == "SELL")
             success = G_Trade.Sell(volume, symbol, 0, sl, tp, "FrappedDollars Copy");
 
+         // Journalisation locale
+         G_TradeJournal[G_TradeJournalSize].trade_id = copiedTradeId;
+         G_TradeJournal[G_TradeJournalSize].sequence_id = sequence_id;
+         G_TradeJournal[G_TradeJournalSize].action = "OPEN";
+         G_TradeJournal[G_TradeJournalSize].timestamp = TimeCurrent();
          if(success)
          {
+            G_TradeJournal[G_TradeJournalSize].status = "EXECUTED";
             ulong ticket = G_Trade.ResultDeal();
             UpdateBackend(copiedTradeId, ticket, "SUCCESS", 0);
          }
          else
          {
+            G_TradeJournal[G_TradeJournalSize].status = "FAILED";
             Print("Échec de l'ouverture : ", G_Trade.ResultRetcodeDescription());
             UpdateBackend(copiedTradeId, 0, "FAILED", 0);
          }
+         G_TradeJournalSize++;
       }
-
-      // --- ACTION : FERMETURE ---
-      else if(status == "PENDING_CLOSE")
+      else if(action == "CLOSE")
       {
-         Print("Exécution d'une FERMETURE pour le ticket client : ", clientTicket);
+         // Vérifier que l'OPEN correspondant a été exécuté
+         bool openExecuted = false;
+         for(int j=0; j<G_TradeJournalSize; j++)
+            if(G_TradeJournal[j].trade_id == copiedTradeId && G_TradeJournal[j].action == "OPEN" && G_TradeJournal[j].status == "EXECUTED")
+               openExecuted = true;
+         if(!openExecuted)
+         {
+            Print("[STATE] CLOSE ignoré car OPEN non exécuté pour trade_id=", copiedTradeId);
+            continue;
+         }
 
-         long tmpTicket = (long)StringToInteger(clientTicket); // conversion explicite string → long
-         ulong ticketToClose = (ulong)tmpTicket;               // conversion explicite long → ulong
+         // Vérifier si ce CLOSE a déjà été exécuté
+         bool closeAlreadyExecuted = false;
+         for(int j=0; j<G_TradeJournalSize; j++)
+            if(G_TradeJournal[j].trade_id == copiedTradeId && G_TradeJournal[j].action == "CLOSE" && G_TradeJournal[j].status == "EXECUTED")
+               closeAlreadyExecuted = true;
+         if(closeAlreadyExecuted) continue;
 
+         Print("[STATE] Tentative de CLOSE pour trade_id=", copiedTradeId, " ticket=", clientTicket);
+         long tmpTicket = (long)StringToInteger(clientTicket);
+         ulong ticketToClose = (ulong)tmpTicket;
          if(PositionSelectByTicket(ticketToClose))
          {
             string sym = PositionGetString(POSITION_SYMBOL);
             double profit = PositionGetDouble(POSITION_PROFIT);
-
             if(G_Trade.PositionClose(sym))
             {
                Print("Position fermée avec succès : ", sym, " ticket=", ticketToClose);
+               // Journalisation
+               G_TradeJournal[G_TradeJournalSize].trade_id = copiedTradeId;
+               G_TradeJournal[G_TradeJournalSize].sequence_id = sequence_id;
+               G_TradeJournal[G_TradeJournalSize].action = "CLOSE";
+               G_TradeJournal[G_TradeJournalSize].timestamp = TimeCurrent();
+               G_TradeJournal[G_TradeJournalSize].status = "EXECUTED";
+               G_TradeJournalSize++;
                UpdateBackend(copiedTradeId, ticketToClose, "CLOSED", profit);
             }
             else
             {
                Print("Échec de la fermeture : ", G_Trade.ResultRetcodeDescription());
+               G_TradeJournal[G_TradeJournalSize].trade_id = copiedTradeId;
+               G_TradeJournal[G_TradeJournalSize].sequence_id = sequence_id;
+               G_TradeJournal[G_TradeJournalSize].action = "CLOSE";
+               G_TradeJournal[G_TradeJournalSize].timestamp = TimeCurrent();
+               G_TradeJournal[G_TradeJournalSize].status = "FAILED";
+               G_TradeJournalSize++;
                UpdateBackend(copiedTradeId, ticketToClose, "FAILED_CLOSE", 0);
             }
          }
          else
          {
             Print("Impossible de sélectionner la position avec ticket : ", ticketToClose);
+            G_TradeJournal[G_TradeJournalSize].trade_id = copiedTradeId;
+            G_TradeJournal[G_TradeJournalSize].sequence_id = sequence_id;
+            G_TradeJournal[G_TradeJournalSize].action = "CLOSE";
+            G_TradeJournal[G_TradeJournalSize].timestamp = TimeCurrent();
+            G_TradeJournal[G_TradeJournalSize].status = "FAILED_SELECT";
+            G_TradeJournalSize++;
             UpdateBackend(copiedTradeId, ticketToClose, "FAILED_SELECT", 0);
          }
       }

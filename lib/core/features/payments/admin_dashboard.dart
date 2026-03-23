@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 
 class AdminPaymentsDashboard extends StatelessWidget {
+  const AdminPaymentsDashboard({super.key});
+
   @override
   Widget build(BuildContext context) {
     // TODO: fetch payments from backend
     return Scaffold(
-      appBar: AppBar(title: Text('Dashboard Paiements')),
+      appBar: AppBar(title: const Text('Dashboard Paiements')),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -18,9 +20,9 @@ class AdminPaymentsDashboard extends StatelessWidget {
                   // TODO: replace with real payment data
                   return Card(
                     child: ListTile(
-                      leading: CircleAvatar(child: Icon(Icons.person)),
-                      title: Text('Client Nom/Email'),
-                      subtitle: Column(
+                      leading: const CircleAvatar(child: Icon(Icons.person)),
+                      title: const Text('Client Nom/Email'),
+                      subtitle: const Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text('Montant: 100 USD'),
@@ -37,13 +39,13 @@ class AdminPaymentsDashboard extends StatelessWidget {
                             onPressed: () {
                               // TODO: validate payment
                             },
-                            child: Text('Valider'),
+                            child: const Text('Valider'),
                           ),
                           ElevatedButton(
                             onPressed: () {
                               // TODO: refuse payment
                             },
-                            child: Text('Refuser'),
+                            child: const Text('Refuser'),
                           ),
                         ],
                       ),
@@ -52,12 +54,12 @@ class AdminPaymentsDashboard extends StatelessWidget {
                 },
               ),
             ),
-            SizedBox(height: 16),
+            const SizedBox(height: 16),
             ElevatedButton(
               onPressed: () {
                 // TODO: export CSV logic
               },
-              child: Text('Exporter CSV'),
+              child: const Text('Exporter CSV'),
             ),
           ],
         ),

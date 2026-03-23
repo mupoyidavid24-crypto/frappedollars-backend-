@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 
 class AdminDashboardScreen extends StatelessWidget {
+  const AdminDashboardScreen({super.key});
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Centre de contrôle Admin'),
+        title: const Text('Centre de contrôle Admin'),
       ),
       body: ListView(
         children: [
@@ -61,12 +63,12 @@ class _DashboardTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      margin: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
       child: ListTile(
         leading: Icon(icon, size: 32),
-        title: Text(title, style: TextStyle(fontWeight: FontWeight.bold)),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
         subtitle: Text(subtitle),
-        trailing: Icon(Icons.arrow_forward_ios),
+        trailing: const Icon(Icons.arrow_forward_ios),
         onTap: onTap,
       ),
     );
