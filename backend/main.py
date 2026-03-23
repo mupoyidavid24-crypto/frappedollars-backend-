@@ -10,6 +10,11 @@ from fastapi import APIRouter
 import secrets
 from fastapi import Body
 
+
+# Constantes pour la gestion des retries
+RETRY_INTERVAL_SECONDS = 30  # Intervalle entre chaque tentative de retry (en secondes)
+RETRY_MAX_ATTEMPTS = 5       # Nombre maximal de tentatives de retry
+
 app = FastAPI()
 
 monitoring_router = APIRouter()
