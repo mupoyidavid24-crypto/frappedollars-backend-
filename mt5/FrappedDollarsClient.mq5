@@ -7,6 +7,8 @@ void ConfirmerExecutionTrade(string backendUrl, string client_login, string trad
    json += "}";
    char data[], result[];
    string headers = "Content-Type: application/json\r\n";
+   if(StringLen(InpApiKey) > 0)
+      headers += "x-api-key: " + InpApiKey + "\r\n";
    int jsonLen = StringLen(json);
    ArrayResize(data, jsonLen);
    StringToCharArray(json, data, 0, jsonLen, CP_UTF8);
@@ -32,6 +34,7 @@ input string   InpBroker       = "ICMarketsSC";               // Nom du broker (
 input string   InpServer       = "Demo";                      // Nom du serveur (à renseigner)
 input string   InpAccountType  = "LIVE";                      // Type de compte (LIVE/DEMO)
 input int      InpTimerSeconds = 2;                            // Vérification toutes les 2 sec
+input string   InpApiKey       = "";                           // Clé API à renseigner (copier/coller depuis le backend)
 
 //--- Globals
 //--- Globals
@@ -85,7 +88,11 @@ void FetchAndExecute()
    string result_headers = "";
    string url = InpBackendUrl + "/client/pending_trades/" + G_ClientId;
 
-   int res = WebRequest("GET", url, "", 1000, data, result, result_headers);
+   string headers = "";
+   if(StringLen(InpApiKey) > 0)
+      headers = "x-api-key: " + InpApiKey + "\r\n";
+
+   int res = WebRequest("GET", url, headers, 1000, data, result, result_headers);
 
    if(res == 200)
    {
@@ -252,6 +259,8 @@ void UpdateBackend(string copiedTradeId, ulong ticket, string status, double pro
    uchar data[];
    uchar result[];
    string headers = "Content-Type: application/json\r\n";
+   if(StringLen(InpApiKey) > 0)
+      headers += "x-api-key: " + InpApiKey + "\r\n";
    StringToCharArray(json, data);
    string result_headers = "";
    WebRequest("POST", url, headers, 1000, data, result, result_headers);

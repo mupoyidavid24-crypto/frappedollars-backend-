@@ -50,14 +50,15 @@ async def verify_api_key(request: Request):
 
 # Endpoint pour confirmation d'exécution d'un trade par le client
 @app.post("/client/trade_executed")
-async def trade_executed(request: Request, auth_client_id: str = Depends(verify_api_key)):
+async def trade_executed(request: Request):
     data = await request.json()
     client_login = data.get("client_login")
     trade_id = data.get("trade_id")
     if not client_login or not trade_id:
         return JSONResponse({"error": "client_login et trade_id requis"}, status_code=400)
-    if client_login != auth_client_id:
-        raise HTTPException(status_code=403, detail="Forbidden")
+    # Auth désactivée temporairement
+    # if client_login != auth_client_id:
+    #     raise HTTPException(status_code=403, detail="Forbidden")
     trades = pending_trades.get(client_login, [])
     # Suppression du trade exécuté
     new_trades = [t for t in trades if str(t.get("id")) != str(trade_id) and str(t.get("ticket_id")) != str(trade_id)]
@@ -99,9 +100,10 @@ from backend.config import supabase
 pending_trades: Dict[str, List[dict]] = {}
 
 @app.get("/client/pending_trades/{mt5_login}")
-def client_pending_trades(mt5_login: str, auth_client_id: str = Depends(verify_api_key)):
-    if mt5_login != auth_client_id:
-        raise HTTPException(status_code=403, detail="Forbidden")
+def client_pending_trades(mt5_login: str):
+    # Auth désactivée temporairement
+    # if mt5_login != auth_client_id:
+    #     raise HTTPException(status_code=403, detail="Forbidden")
     trades = pending_trades.get(mt5_login, [])
     # Adapter chaque trade au format attendu par l'EA client
     formatted = []
