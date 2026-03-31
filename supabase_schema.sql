@@ -150,12 +150,108 @@ CREATE INDEX admin_access_logs_time_idx ON admin_access_logs(access_time);
 CREATE INDEX IF NOT EXISTS idx_subscriptions_user_id ON subscriptions(user_id);
 CREATE INDEX IF NOT EXISTS idx_copied_trades_signal_id ON copied_trades(signal_id);
 
+-- 9. EA API KEYS
+CREATE TABLE IF NOT EXISTS ea_api_keys (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    mt5_login TEXT NOT NULL UNIQUE,
+    account_role user_role NOT NULL,
+    api_key_hash TEXT NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_ea_api_keys_mt5_login ON ea_api_keys(mt5_login);
+
+DO $$ BEGIN
+    CREATE TYPE trade_dispatch_status AS ENUM ('PENDING', 'DISPATCHED', 'EXECUTED', 'FAILED', 'RETRY', 'CANCELLED');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+-- 10. TRADE DISPATCH PIPELINE
+CREATE TABLE IF NOT EXISTS trade_dispatches (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    master_login TEXT NOT NULL,
+    client_login TEXT NOT NULL,
+    ticket_id TEXT NOT NULL,
+    action TEXT NOT NULL CHECK (action IN ('OPEN', 'CLOSE')),
+    symbol TEXT NOT NULL,
+    trade_type TEXT NOT NULL CHECK (trade_type IN ('BUY', 'SELL')),
+    volume DECIMAL(10, 2) NOT NULL,
+    open_price DECIMAL(15, 5),
+    sl DECIMAL(15, 5),
+    tp DECIMAL(15, 5),
+    status trade_dispatch_status NOT NULL DEFAULT 'PENDING',
+    retry_count INTEGER NOT NULL DEFAULT 0,
+    client_ticket_id TEXT,
+    last_error TEXT,
+    claimed_by TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    dispatched_at TIMESTAMPTZ,
+    executed_at TIMESTAMPTZ,
+    CONSTRAINT trade_dispatches_dedupe UNIQUE (client_login, ticket_id, action)
+);
+CREATE INDEX IF NOT EXISTS idx_trade_dispatches_client_status ON trade_dispatches(client_login, status, created_at);
+CREATE INDEX IF NOT EXISTS idx_trade_dispatches_master_created ON trade_dispatches(master_login, created_at DESC);
+
+CREATE OR REPLACE FUNCTION set_updated_at_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_profiles_updated_at ON profiles;
+CREATE TRIGGER trg_profiles_updated_at
+    BEFORE UPDATE ON profiles
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at_timestamp();
+
+DROP TRIGGER IF EXISTS trg_trade_dispatches_updated_at ON trade_dispatches;
+CREATE TRIGGER trg_trade_dispatches_updated_at
+    BEFORE UPDATE ON trade_dispatches
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at_timestamp();
+
+DROP TRIGGER IF EXISTS trg_ea_api_keys_updated_at ON ea_api_keys;
+CREATE TRIGGER trg_ea_api_keys_updated_at
+    BEFORE UPDATE ON ea_api_keys
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at_timestamp();
+
+CREATE OR REPLACE FUNCTION claim_trade_dispatches(p_client_login TEXT, p_limit INTEGER DEFAULT 20)
+RETURNS SETOF trade_dispatches
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+    RETURN QUERY
+    WITH locked_rows AS (
+        SELECT td.id
+        FROM trade_dispatches td
+        WHERE td.client_login = p_client_login
+          AND td.status IN ('PENDING', 'RETRY')
+        ORDER BY td.created_at ASC
+        FOR UPDATE SKIP LOCKED
+        LIMIT p_limit
+    )
+    UPDATE trade_dispatches td
+    SET status = 'DISPATCHED',
+        dispatched_at = NOW(),
+        updated_at = NOW()
+    FROM locked_rows
+    WHERE td.id = locked_rows.id
+    RETURNING td.*;
+END;
+$$;
+
 -- Row Level Security (RLS)
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE trading_accounts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE subscriptions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE support_tickets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE learning_content ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ea_api_keys ENABLE ROW LEVEL SECURITY;
+ALTER TABLE trade_dispatches ENABLE ROW LEVEL SECURITY;
 
 -- Policies
 -- Profiles: View and Update own

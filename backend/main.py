@@ -1,180 +1,234 @@
-from fastapi import FastAPI, Request, Depends, HTTPException, status
-from fastapi.responses import JSONResponse
-from typing import Dict, List
-import uuid
-import time
-from backend.config import supabase
-import asyncio
-from fastapi import BackgroundTasks
-from fastapi import APIRouter
-import secrets
-from fastapi import Body
+from __future__ import annotations
+
+import hmac
+import os
+from typing import Any, Literal
+
+from dotenv import load_dotenv
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, status
+from pydantic import BaseModel, ConfigDict, Field
+
+from backend.storage import SQLiteStorage, hash_api_key, utc_now
 
 
-# Constantes pour la gestion des retries
-RETRY_INTERVAL_SECONDS = 30  # Intervalle entre chaque tentative de retry (en secondes)
-RETRY_MAX_ATTEMPTS = 5       # Nombre maximal de tentatives de retry
+BASE_DIR = os.path.dirname(__file__)
+load_dotenv(os.path.join(BASE_DIR, ".env"))
 
-app = FastAPI()
+ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
+SQLITE_DB_PATH = os.getenv(
+    "SQLITE_DB_PATH",
+    os.path.join(BASE_DIR, "runtime", "pipeline.db"),
+)
+DISPATCH_LEASE_SECONDS = int(os.getenv("DISPATCH_LEASE_SECONDS", "30"))
+DISPATCHABLE_STATUSES = ("PENDING", "RETRY")
 
-monitoring_router = APIRouter()
+storage = SQLiteStorage(SQLITE_DB_PATH)
+app = FastAPI(title="FrappedDollars Backend", version="2.1.0")
 
-@monitoring_router.get("/monitoring")
-def monitoring_status():
-    # Compte les trades par statut
-    res = supabase.table("trades").select("status", count="exact").execute()
-    stats = {}
-    if res.data:
-        for trade in res.data:
-            status = trade.get("status", "UNKNOWN")
-            stats[status] = stats.get(status, 0) + 1
-    return {"trade_status_counts": stats}
 
-app.include_router(monitoring_router)
+class MasterTradePayload(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
 
-async def verify_api_key(request: Request):
-    # Accepte Authorization: Bearer ... ou x-api-key
-    api_key = None
-    auth = request.headers.get("authorization")
-    if auth and auth.startswith("Bearer "):
-        api_key = auth.split(" ", 1)[1]
-    else:
-        api_key = request.headers.get("x-api-key")
-    if not api_key:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing API key")
-    # Recherche du client_id associé à cette clé dans Supabase
-    res = supabase.table("api_keys").select("client_id").eq("api_key", api_key).execute()
-    if not res.data or len(res.data) == 0:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
-    return res.data[0]["client_id"]
+    client_login: str = Field(min_length=1)
+    master_login: str = Field(min_length=1)
+    ticket_id: str = Field(min_length=1)
+    action: Literal["OPEN", "CLOSE"]
+    symbol: str = Field(min_length=1)
+    trade_type: Literal["BUY", "SELL"]
+    volume: float = Field(gt=0)
+    open_price: float | None = None
+    sl: float | None = None
+    tp: float | None = None
 
-# Endpoint pour confirmation d'exécution d'un trade par le client
-@app.post("/client/trade_executed")
-async def trade_executed(request: Request):
-    data = await request.json()
-    client_login = data.get("client_login")
-    trade_id = data.get("trade_id")
-    if not client_login or not trade_id:
-        return JSONResponse({"error": "client_login et trade_id requis"}, status_code=400)
-    # Auth désactivée temporairement
-    # if client_login != auth_client_id:
-    #     raise HTTPException(status_code=403, detail="Forbidden")
-    trades = pending_trades.get(client_login, [])
-    # Suppression du trade exécuté
-    new_trades = [t for t in trades if str(t.get("id")) != str(trade_id) and str(t.get("ticket_id")) != str(trade_id)]
-    pending_trades[client_login] = new_trades
-    return {"status": "ok", "removed": trade_id}
 
-# Simule une file d'attente pour les trades à relancer (en mémoire)
-retry_queue = []
+class TradeExecutedPayload(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
 
-async def retry_failed_trades():
-    while True:
-        # Récupère les trades en status 'RETRY' ou 'FAILED' dans Supabase
-        res = supabase.table("trades").select("id, client_id, status, retry_count").in_("status", ["RETRY", "FAILED"]).execute()
-        trades = res.data if res.data else []
-        for trade in trades:
-            retry_count = trade.get("retry_count", 0)
-            if retry_count >= RETRY_MAX_ATTEMPTS:
-                # Archive le trade si trop d'échecs
-                supabase.table("trades").update({"status": "ARCHIVED"}).eq("id", trade["id"]).execute()
-                print(f"[ARCHIVED] Trade {trade['id']} pour client {trade['client_id']} (tentative {retry_count})")
-                continue
-            # Relance le trade (ici, on repasse en PENDING pour qu'il soit redistribué)
-            supabase.table("trades").update({"status": "PENDING", "retry_count": retry_count + 1}).eq("id", trade["id"]).execute()
-            print(f"[RETRY] Relance du trade {trade['id']} pour client {trade['client_id']} (tentative {retry_count+1})")
-        await asyncio.sleep(RETRY_INTERVAL_SECONDS)
+    client_login: str = Field(min_length=1)
+    trade_id: str = Field(min_length=1)
+    client_ticket_id: str | None = None
 
-@app.on_event("startup")
-async def start_retry_task():
-    loop = asyncio.get_event_loop()
-    loop.create_task(retry_failed_trades())
 
-from fastapi import FastAPI, Request
-from typing import Dict, List
-import uuid
-import time
-from backend.config import supabase
+class TradeFailedPayload(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
 
-# Stockage en mémoire : {login: [trades]}
-pending_trades: Dict[str, List[dict]] = {}
+    client_login: str = Field(min_length=1)
+    trade_id: str = Field(min_length=1)
+    error_message: str = Field(min_length=1)
 
-@app.get("/client/pending_trades/{mt5_login}")
-def client_pending_trades(mt5_login: str):
-    # Auth désactivée temporairement
-    # if mt5_login != auth_client_id:
-    #     raise HTTPException(status_code=403, detail="Forbidden")
-    trades = pending_trades.get(mt5_login, [])
-    # Adapter chaque trade au format attendu par l'EA client
-    formatted = []
-    for t in trades:
-        formatted.append({
-            "id": t.get("id", t.get("ticket_id", str(uuid.uuid4()))),
-            "execution_status": t.get("execution_status", "PENDING"),
-            "symbol": t.get("symbol"),
-            "trade_type": t.get("trade_type"),
-            "volume_executed": t.get("volume"),
-            "sl": t.get("sl"),
-            "tp": t.get("tp"),
-            "client_ticket_id": t.get("client_ticket_id", ""),
-            "timestamp": t.get("timestamp", int(time.time())),
-        })
-    return {"pending_trades": formatted}
+
+class GenerateApiKeyPayload(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    mt5_login: str = Field(min_length=1)
+    account_role: Literal["MASTER", "CLIENT"]
+
+
+def _verify_ea_api_key(mt5_login: str, provided_api_key: str | None, expected_role: str) -> dict[str, Any]:
+    if not provided_api_key:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="L'en-tete x-api-key est obligatoire.",
+        )
+
+    record = storage.get_api_key_record(mt5_login)
+    if record is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Aucune cle API active pour le login MT5 {mt5_login}.",
+        )
+    if not bool(record.get("is_active", 0)):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"La cle API du login MT5 {mt5_login} est desactivee.",
+        )
+    if record.get("account_role") != expected_role:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Le login MT5 {mt5_login} n'a pas le role {expected_role}.",
+        )
+    expected_hash = record.get("api_key_hash", "")
+    if not hmac.compare_digest(expected_hash, hash_api_key(provided_api_key)):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Cle API invalide.",
+        )
+    return record
+
+
+def _require_admin_key(x_admin_key: str | None = Header(default=None)) -> str:
+    if not ADMIN_API_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="ADMIN_API_KEY n'est pas configuree sur le backend.",
+        )
+    if not x_admin_key or not hmac.compare_digest(x_admin_key, ADMIN_API_KEY):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Cle admin invalide.",
+        )
+    return x_admin_key
+
 
 @app.get("/")
-def root():
-    return {"message": "API OK"}
+def root() -> dict[str, str]:
+    return {"message": "FrappedDollars backend OK", "pipeline": "sqlite-persisted"}
+
 
 @app.get("/ping")
-def ping():
+def ping() -> dict[str, str]:
     return {"ping": "pong"}
 
+
+@app.get("/monitoring")
+def monitoring_status(admin_key: str = Depends(_require_admin_key)) -> dict[str, Any]:
+    del admin_key
+    return {
+        "dispatch_status_counts": storage.monitoring_counts(),
+        "dispatchable_statuses": DISPATCHABLE_STATUSES,
+    }
+
+
 @app.post("/master/trade")
-async def master_trade(request: Request):
-    data = await request.json()
-    print("TRADE RECU:", data)
-    # On attend un champ 'client_login' dans le JSON pour router le trade
-    client_login = data.get("client_login")
-    if not client_login:
-        # Pour test, fallback sur un login de démo
-        client_login = "87654321"
-    # Générer un id unique et enrichir le trade
-    trade_id = str(uuid.uuid4())
-    enriched = dict(data)
-    enriched["id"] = trade_id
-    enriched["execution_status"] = "PENDING"
-    enriched["volume_executed"] = data.get("volume")
-    enriched["timestamp"] = int(time.time())
-    if client_login not in pending_trades:
-        pending_trades[client_login] = []
-    pending_trades[client_login].append(enriched)
-    print(f"Trade ajouté à {client_login} :", enriched)
-    return {"status": "received", "data": enriched}
+def master_trade(
+    payload: MasterTradePayload,
+    x_api_key: str | None = Header(default=None),
+) -> dict[str, Any]:
+    _verify_ea_api_key(payload.master_login, x_api_key, expected_role="MASTER")
+
+    existing = storage.get_dispatch_by_dedupe(payload.client_login, payload.ticket_id, payload.action)
+    if existing is not None:
+        return {"item": existing, "duplicate": True}
+
+    created = storage.create_dispatch(payload.model_dump())
+    return {"item": created, "duplicate": False}
+
+
+@app.get("/client/pending_trades/{mt5_login}")
+def client_pending_trades(
+    mt5_login: str,
+    limit: int = Query(default=20, ge=1, le=100),
+    x_api_key: str | None = Header(default=None),
+) -> dict[str, list[dict[str, Any]]]:
+    _verify_ea_api_key(mt5_login, x_api_key, expected_role="CLIENT")
+    storage.requeue_stale_dispatches(mt5_login, DISPATCH_LEASE_SECONDS)
+    return {"items": storage.claim_dispatches(mt5_login, limit)}
+
+
+@app.post("/client/trade_executed")
+def trade_executed(
+    payload: TradeExecutedPayload,
+    x_api_key: str | None = Header(default=None),
+) -> dict[str, Any]:
+    _verify_ea_api_key(payload.client_login, x_api_key, expected_role="CLIENT")
+
+    row = storage.update_dispatch_status(
+        trade_id=payload.trade_id,
+        client_login=payload.client_login,
+        required_status="DISPATCHED",
+        updates={
+            "status": "EXECUTED",
+            "executed_at": utc_now(),
+            "client_ticket_id": payload.client_ticket_id,
+        },
+    )
+    if row is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Le trade {payload.trade_id} pour {payload.client_login} n'est pas dans l'etat attendu DISPATCHED."
+            ),
+        )
+    return {"item": row}
+
+
+@app.post("/client/trade_failed")
+def trade_failed(
+    payload: TradeFailedPayload,
+    x_api_key: str | None = Header(default=None),
+) -> dict[str, Any]:
+    _verify_ea_api_key(payload.client_login, x_api_key, expected_role="CLIENT")
+
+    row = storage.update_dispatch_status(
+        trade_id=payload.trade_id,
+        client_login=payload.client_login,
+        required_status="DISPATCHED",
+        updates={
+            "status": "FAILED",
+            "last_error": payload.error_message,
+        },
+    )
+    if row is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Le trade {payload.trade_id} pour {payload.client_login} n'est pas dans l'etat attendu DISPATCHED."
+            ),
+        )
+    return {"item": row}
+
 
 @app.post("/admin/generate_api_key")
-def generate_api_key(client_id: str = Body(..., embed=True)):
-    # Génère une clé aléatoire sécurisée
-    api_key = secrets.token_urlsafe(32)
-    # Insère ou met à jour la clé dans Supabase
-    res = supabase.table("api_keys").upsert({"client_id": client_id, "api_key": api_key}).execute()
-    return {"client_id": client_id, "api_key": api_key, "status": "created", "supabase": res.data}
+def generate_api_key(
+    payload: GenerateApiKeyPayload,
+    admin_key: str = Depends(_require_admin_key),
+) -> dict[str, str]:
+    del admin_key
+    return storage.issue_api_key(payload.mt5_login, payload.account_role)
 
-@app.get("/admin/dashboard")
-def admin_dashboard():
-    # Récupère tous les trades
-    res = supabase.table("trades").select("id, client_id, status, timestamp").execute()
-    trades = res.data if res.data else []
-    # Agrège par client
-    dashboard = {}
-    for t in trades:
-        cid = t.get("client_id", "unknown")
-        status = t.get("status", "UNKNOWN")
-        ts = t.get("timestamp")
-        if cid not in dashboard:
-            dashboard[cid] = {"status_counts": {}, "last_trades": []}
-        dashboard[cid]["status_counts"][status] = dashboard[cid]["status_counts"].get(status, 0) + 1
-        dashboard[cid]["last_trades"].append({"id": t["id"], "status": status, "timestamp": ts})
-    # Trie les dernières activités par date décroissante
-    for cid in dashboard:
-        dashboard[cid]["last_trades"] = sorted(dashboard[cid]["last_trades"], key=lambda x: x["timestamp"] or 0, reverse=True)[:10]
-    return {"clients": dashboard}
+
+@app.get("/admin/trade_dispatches")
+def list_trade_dispatches(
+    client_login: str | None = Query(default=None),
+    status_filter: str | None = Query(default=None, alias="status"),
+    limit: int = Query(default=100, ge=1, le=500),
+    admin_key: str = Depends(_require_admin_key),
+) -> dict[str, list[dict[str, Any]]]:
+    del admin_key
+    return {
+        "items": storage.list_dispatches(
+            client_login=client_login,
+            status_filter=status_filter,
+            limit=limit,
+        )
+    }

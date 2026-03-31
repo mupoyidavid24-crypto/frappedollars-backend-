@@ -41,6 +41,11 @@ input string   InpApiKey       = "";                           // Clé API à re
 CTrade         G_Trade;
 string         G_ClientId;
 
+#define TAG_LENGTH 13
+#define SYSTEM_PREFIX 410000000
+#define MAGIC_RANGE 10000000
+#define MAX_SIGNED_INT 2147483647
+
 //--- Journalisation locale (simple, à améliorer pour la prod)
 struct TradeJournalEntry {
    string trade_id;
@@ -51,6 +56,101 @@ struct TradeJournalEntry {
 };
 TradeJournalEntry G_TradeJournal[1000]; // Simple buffer, à remplacer par fichier ou DB locale en prod
 int G_TradeJournalSize = 0;
+
+string CollapseSpaces(string value)
+{
+   while(StringFind(value, "  ") >= 0)
+      StringReplace(value, "  ", " ");
+   return value;
+}
+
+string NormalizeTradeId(string rawTradeId)
+{
+   string normalized = rawTradeId;
+   normalized = StringTrimLeft(normalized);
+   normalized = StringTrimRight(normalized);
+   normalized = StringToLower(normalized);
+   normalized = CollapseSpaces(normalized);
+   return normalized;
+}
+
+ulong Fnv1a64Utf8(string normalizedTradeId)
+{
+   uchar bytes[];
+   int count = StringToCharArray(normalizedTradeId, bytes, 0, WHOLE_ARRAY, CP_UTF8);
+   ulong hash = 0xCBF29CE484222325;
+
+   for(int i = 0; i < count; i++)
+   {
+      if(bytes[i] == 0)
+         break;
+      hash ^= (ulong)bytes[i];
+      hash *= 0x100000001B3;
+   }
+   return hash;
+}
+
+uint Fnv1a32Utf8(string normalizedTradeId)
+{
+   uchar bytes[];
+   int count = StringToCharArray(normalizedTradeId, bytes, 0, WHOLE_ARRAY, CP_UTF8);
+   uint hash = 0x811C9DC5;
+
+   for(int i = 0; i < count; i++)
+   {
+      if(bytes[i] == 0)
+         break;
+      hash ^= (uint)bytes[i];
+      hash *= 0x01000193;
+   }
+   return hash;
+}
+
+string Base36LowerUnsigned(ulong value)
+{
+   string alphabet = "0123456789abcdefghijklmnopqrstuvwxyz";
+   if(value == 0)
+      return "0";
+
+   string output = "";
+   while(value > 0)
+   {
+      int digit = (int)(value % 36);
+      output = StringSubstr(alphabet, digit, 1) + output;
+      value = value / 36;
+   }
+   return output;
+}
+
+string MakeTradeTag(string rawTradeId)
+{
+   string normalized = NormalizeTradeId(rawTradeId);
+   ulong hash64 = Fnv1a64Utf8(normalized);
+   string fullBase36 = Base36LowerUnsigned(hash64);
+
+   while(StringLen(fullBase36) < TAG_LENGTH)
+      fullBase36 = "0" + fullBase36;
+
+   return StringSubstr(fullBase36, StringLen(fullBase36) - TAG_LENGTH, TAG_LENGTH);
+}
+
+int MakeMagicNumber(string rawTradeId)
+{
+   string normalized = NormalizeTradeId(rawTradeId);
+   uint hash32 = Fnv1a32Utf8(normalized);
+   uint suffix = hash32 % MAGIC_RANGE;
+   long magic = (long)SYSTEM_PREFIX + (long)suffix;
+
+   if(magic < 0 || magic > MAX_SIGNED_INT)
+      return -1;
+
+   return (int)magic;
+}
+
+string MakeBrokerComment(string rawTradeId)
+{
+   return "FRP|v1|t=" + MakeTradeTag(rawTradeId);
+}
 
 //+------------------------------------------------------------------+
 //| Expert initialization function                                   |
@@ -149,10 +249,18 @@ void ParseAndProcess(string json)
          // Exécution de l'OPEN
          Print("[STATE] Tentative d'OPEN : ", symbol, " ", type, " Vol:", volume, " seq:", sequence_id);
          bool success = false;
+         int magicNumber = MakeMagicNumber(copiedTradeId);
+         string brokerComment = MakeBrokerComment(copiedTradeId);
+         if(magicNumber < 0)
+         {
+            Print("Magic number invalide pour trade_id=", copiedTradeId);
+            continue;
+         }
+         G_Trade.SetExpertMagicNumber((ulong)magicNumber);
          if(type == "BUY")
-            success = G_Trade.Buy(volume, symbol, 0, sl, tp, "FrappedDollars Copy");
+            success = G_Trade.Buy(volume, symbol, 0, sl, tp, brokerComment);
          else if(type == "SELL")
-            success = G_Trade.Sell(volume, symbol, 0, sl, tp, "FrappedDollars Copy");
+            success = G_Trade.Sell(volume, symbol, 0, sl, tp, brokerComment);
 
          // Journalisation locale
          G_TradeJournal[G_TradeJournalSize].trade_id = copiedTradeId;
