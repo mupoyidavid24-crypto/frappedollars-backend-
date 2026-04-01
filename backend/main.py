@@ -149,10 +149,10 @@ def client_pending_trades(
     mt5_login: str,
     limit: int = Query(default=20, ge=1, le=100),
     x_api_key: str | None = Header(default=None),
-) -> dict[str, list[dict[str, Any]]]:
+) -> dict[str, Any]:
     _verify_ea_api_key(mt5_login, x_api_key, expected_role="CLIENT")
     storage.requeue_stale_dispatches(mt5_login, DISPATCH_LEASE_SECONDS)
-    return {"items": storage.claim_dispatches(mt5_login, limit)}
+    return {"version": "v1", "items": storage.claim_dispatches(mt5_login, limit)}
 
 
 @app.post("/client/trade_executed")

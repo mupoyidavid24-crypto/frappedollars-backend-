@@ -169,7 +169,9 @@ def run_demo() -> None:
         )
         print(pull_response.status_code, pull_response.json())
         pull_response.raise_for_status()
-        items = pull_response.json()["items"]
+        pull_payload = pull_response.json()
+        assert pull_payload["version"] == "v1"
+        items = pull_payload["items"]
         assert len(items) == 1
         trade_id = items[0]["id"]
 
@@ -180,7 +182,9 @@ def run_demo() -> None:
         )
         print(second_pull.status_code, second_pull.json())
         second_pull.raise_for_status()
-        assert second_pull.json()["items"] == []
+        second_payload = second_pull.json()
+        assert second_payload["version"] == "v1"
+        assert second_payload["items"] == []
 
         print("\n4. Redemarrage serveur puis verification de persistance")
         print(_stop_server(server))
