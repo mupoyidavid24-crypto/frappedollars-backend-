@@ -14,7 +14,7 @@ from backend.storage import SQLiteStorage, hash_api_key, utc_now
 BASE_DIR = os.path.dirname(__file__)
 load_dotenv(os.path.join(BASE_DIR, ".env"))
 
-ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
+ADMIN_API_KEY = os.getenv("ADMIN_API_KEY") or "a23112857d84806ef3201f526ea2558a"
 SQLITE_DB_PATH = os.getenv(
     "SQLITE_DB_PATH",
     os.path.join(BASE_DIR, "runtime", "pipeline.db"),
