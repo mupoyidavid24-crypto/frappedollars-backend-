@@ -19,7 +19,7 @@ SQLITE_DB_PATH = os.getenv(
     "SQLITE_DB_PATH",
     os.path.join(BASE_DIR, "runtime", "pipeline.db"),
 )
-DISPATCH_LEASE_SECONDS = int(os.getenv("DISPATCH_LEASE_SECONDS", "30"))
+DISPATCH_LEASE_SECONDS = int(os.getenv("DISPATCH_LEASE_SECONDS", "300"))
 DISPATCHABLE_STATUSES = ("PENDING", "RETRY")
 
 storage = SQLiteStorage(SQLITE_DB_PATH)
@@ -173,6 +173,17 @@ def trade_executed(
         },
     )
     if row is None:
+        row = storage.update_dispatch_status(
+            trade_id=payload.trade_id,
+            client_login=payload.client_login,
+            required_status="RETRY",
+            updates={
+                "status": "EXECUTED",
+                "executed_at": utc_now(),
+                "client_ticket_id": payload.client_ticket_id,
+            },
+        )
+    if row is None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=(
@@ -198,6 +209,16 @@ def trade_failed(
             "last_error": payload.error_message,
         },
     )
+    if row is None:
+        row = storage.update_dispatch_status(
+            trade_id=payload.trade_id,
+            client_login=payload.client_login,
+            required_status="RETRY",
+            updates={
+                "status": "FAILED",
+                "last_error": payload.error_message,
+            },
+        )
     if row is None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
