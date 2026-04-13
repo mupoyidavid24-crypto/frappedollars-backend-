@@ -1,5 +1,5 @@
 [build]
-  command = "flutter build web --release --dart-define=BACKEND_BASE_URL=https://frappedollars-backend-1.onrender.com"
+  command = "flutter build web --release --no-wasm-dry-run --dart-define=BACKEND_BASE_URL=https://frappedollars-backend-1.onrender.com"
   publish = "build/web"
 
 [[redirects]]
