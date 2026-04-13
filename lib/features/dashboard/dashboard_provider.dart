@@ -3,6 +3,7 @@ import '../../core/services/supabase_service.dart';
 import '../../models/trading_account_model.dart';
 import '../../models/subscription_model.dart';
 import '../../models/trade_model.dart';
+import '../../core/constants/constants.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
@@ -83,7 +84,7 @@ class DashboardProvider extends ChangeNotifier {
 
   Future<String?> downloadEa(String mt5Login, String userId) async {
     try {
-      final response = await http.get(Uri.parse('http://localhost:8000/client/download_ea?mt5_login=$mt5Login&user_id=$userId'));
+      final response = await http.get(Uri.parse('${AppConstants.backendBaseUrl}/client/download_ea?mt5_login=$mt5Login&user_id=$userId'));
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         return data['download_url'] as String?;

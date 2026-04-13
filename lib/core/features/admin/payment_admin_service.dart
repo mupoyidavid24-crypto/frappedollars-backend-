@@ -1,8 +1,9 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../../constants/constants.dart';
 
 class PaymentAdminService {
-  static const String baseUrl = 'http://localhost:8000/admin'; // À adapter selon le déploiement
+  static String get baseUrl => AppConstants.adminBaseUrl;
 
   // Récupérer la liste des paiements
   static Future<List<Map<String, dynamic>>> fetchPayments() async {

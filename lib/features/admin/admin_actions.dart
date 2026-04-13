@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import '../../core/constants/constants.dart';
 
 class AdminActions extends StatefulWidget {
   const AdminActions({super.key});
@@ -19,7 +20,7 @@ class _AdminActionsState extends State<AdminActions> {
   Future<void> _addPaymentMethod() async {
     final method = {"name": _paymentMethodController.text};
     final response = await http.post(
-      Uri.parse('http://localhost:8000/admin/add_payment_method'),
+      Uri.parse('${AppConstants.adminBaseUrl}/add_payment_method'),
       headers: {'Content-Type': 'application/json'},
       body: json.encode(method),
     );
@@ -31,7 +32,7 @@ class _AdminActionsState extends State<AdminActions> {
   Future<void> _blockUser() async {
     final userId = _userIdController.text;
     final response = await http.post(
-      Uri.parse('http://localhost:8000/admin/block_user/$userId'),
+      Uri.parse('${AppConstants.adminBaseUrl}/block_user/$userId'),
     );
     setState(() {
       _result = response.statusCode == 200 ? 'Compte bloqué.' : 'Erreur: ${response.body}';
@@ -41,7 +42,7 @@ class _AdminActionsState extends State<AdminActions> {
   Future<void> _addVipClient() async {
     final vipId = _vipClientIdController.text;
     final response = await http.post(
-      Uri.parse('http://localhost:8000/admin/add_vip_client'),
+      Uri.parse('${AppConstants.adminBaseUrl}/add_vip_client'),
       headers: {'Content-Type': 'application/json'},
       body: json.encode({"id": vipId}),
     );
@@ -53,7 +54,7 @@ class _AdminActionsState extends State<AdminActions> {
   Future<void> _syncWithMaster() async {
     final clientId = _syncClientIdController.text;
     final response = await http.post(
-      Uri.parse('http://localhost:8000/admin/sync_with_master/$clientId'),
+      Uri.parse('${AppConstants.adminBaseUrl}/sync_with_master/$clientId'),
     );
     setState(() {
       _result = response.statusCode == 200 ? 'Synchronisation réussie.' : 'Erreur: ${response.body}';

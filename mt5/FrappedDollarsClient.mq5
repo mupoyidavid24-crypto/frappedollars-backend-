@@ -528,10 +528,11 @@ int OnInit()
       return(INIT_FAILED);
    }
 
-   if(InpTimerMilliseconds < 100)
-      InpTimerMilliseconds = 100;
-   EventSetMillisecondTimer(InpTimerMilliseconds);
-   Print("[FLOW] Timer configuré à ", InpTimerMilliseconds, " ms, request_timeout=", InpRequestTimeoutMs, " ms");
+   int timerMilliseconds = InpTimerMilliseconds;
+   if(timerMilliseconds < 100)
+      timerMilliseconds = 100;
+   EventSetMillisecondTimer(timerMilliseconds);
+   Print("[FLOW] Timer configuré à ", timerMilliseconds, " ms, request_timeout=", InpRequestTimeoutMs, " ms");
    return(INIT_SUCCEEDED);
 }
 

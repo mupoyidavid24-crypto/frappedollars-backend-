@@ -1,8 +1,9 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../../constants/constants.dart';
 
 class NotificationAdminService {
-  static const String baseUrl = 'http://localhost:8000/admin';
+  static String get baseUrl => AppConstants.adminBaseUrl;
 
   static Future<bool> sendNotification(Map<String, dynamic> data) async {
     try {

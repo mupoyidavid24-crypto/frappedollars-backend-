@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import '../../core/constants/constants.dart';
 
 class AdminSupportList extends StatefulWidget {
   const AdminSupportList({super.key});
@@ -26,7 +27,7 @@ class _AdminSupportListState extends State<AdminSupportList> {
       _error = null;
     });
     try {
-      final response = await http.get(Uri.parse('http://localhost:8000/admin/support_tickets'));
+      final response = await http.get(Uri.parse('${AppConstants.adminBaseUrl}/support_tickets'));
       if (response.statusCode == 200) {
         setState(() {
           _tickets = json.decode(response.body);

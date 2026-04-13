@@ -6,6 +6,7 @@ from typing import Any, Literal
 
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, status
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.storage import SQLiteStorage, hash_api_key, utc_now
@@ -24,6 +25,24 @@ DISPATCHABLE_STATUSES = ("PENDING", "RETRY")
 
 storage = SQLiteStorage(SQLITE_DB_PATH)
 app = FastAPI(title="FrappedDollars Backend", version="2.1.0")
+
+allowed_origins = [
+    origin.strip()
+    for origin in os.getenv(
+        "CORS_ALLOW_ORIGINS",
+        "http://localhost:3000,http://localhost:5000,http://localhost:8080,https://frappedollars.netlify.app",
+    ).split(",")
+    if origin.strip()
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_origin_regex=r"https://.*\.netlify\.app",
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 class MasterTradePayload(BaseModel):

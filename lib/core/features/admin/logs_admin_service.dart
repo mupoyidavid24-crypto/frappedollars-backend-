@@ -1,8 +1,9 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../../constants/constants.dart';
 
 class LogsAdminService {
-  static const String baseUrl = 'http://localhost:8000/admin';
+  static String get baseUrl => AppConstants.adminBaseUrl;
 
   static Future<List<Map<String, dynamic>>> fetchLogs() async {
     final response = await http.get(Uri.parse('$baseUrl/logs'));

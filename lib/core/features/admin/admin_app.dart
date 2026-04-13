@@ -10,6 +10,7 @@ import 'admin_logs_screen.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../constants/constants.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -17,8 +18,8 @@ void main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
   await Supabase.initialize(
-    url: 'YOUR_SUPABASE_URL',
-    anonKey: 'YOUR_SUPABASE_KEY',
+    url: AppConstants.supabaseUrl,
+    anonKey: AppConstants.supabaseAnonKey,
   );
   runApp(const AdminApp());
   setupFCM();
@@ -48,12 +49,12 @@ class AdminApp extends StatelessWidget {
 void setupFCM() async {
   FirebaseMessaging messaging = FirebaseMessaging.instance;
   String? token = await messaging.getToken();
-  // Enregistrer le token FCM côté Supabase pour l'utilisateur
-  if (token != null) {
+  final userId = Supabase.instance.client.auth.currentUser?.id;
+  if (token != null && userId != null) {
     await Supabase.instance.client
       .from('profiles')
       .update({'fcm_token': token})
-      .eq('id', 'USER_ID'); // Remplacer par l'ID utilisateur
+      .eq('id', userId);
   }
 
   FirebaseMessaging.onMessage.listen((RemoteMessage message) {

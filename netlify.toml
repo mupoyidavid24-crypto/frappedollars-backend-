@@ -1,0 +1,8 @@
+[build]
+  command = "flutter build web --release --dart-define=BACKEND_BASE_URL=https://frappedollars-backend-1.onrender.com"
+  publish = "build/web"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

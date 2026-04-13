@@ -1,8 +1,9 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../../constants/constants.dart';
 
 class CopyTradingAdminService {
-  static const String baseUrl = 'http://localhost:8000/admin';
+  static String get baseUrl => AppConstants.adminBaseUrl;
 
   static Future<bool> toggleCopyTrading(String clientId) async {
     final response = await http.post(Uri.parse('$baseUrl/sync_with_master/$clientId'));

@@ -47,7 +47,7 @@ class SupabaseService {
       .limit(1);
     if (response == null || (response is List && response.isEmpty)) return null;
     final data = response is List ? response.first : response;
-    return TradingAccount.fromJson(data);
+    return TradingAccount.fromJson(Map<String, dynamic>.from(data as Map));
   }
 
   Future<void> saveTradingAccount(TradingAccount account) async {
@@ -65,7 +65,7 @@ class SupabaseService {
       .limit(1);
     if (response == null || (response is List && response.isEmpty)) return null;
     final data = response is List ? response.first : response;
-    return Subscription.fromJson(data);
+    return Subscription.fromJson(Map<String, dynamic>.from(data as Map));
   }
 
   // -- TRADES --
