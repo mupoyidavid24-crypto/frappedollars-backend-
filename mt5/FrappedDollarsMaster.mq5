@@ -11,11 +11,38 @@
 //--- Input parameters
 input string   InpBackendUrl   = "https://frappedollars-backend-1.onrender.com";
 input string   InpLogin        = ""; // Laisser vide pour auto, ou mettre le login voulu
+input string   InpClientLogin  = ""; // Login du client cible à copier
+input string   InpClientBroker = "Deriv"; // Broker du client cible
+input string   InpClientServer = "Demo"; // Serveur du client cible
+input string   InpClientAccountType = "DEMO"; // Type de compte du client cible
 input string   InpAccountType  = "MASTER"; // MASTER ou CLIENT
+input string   InpApiKey       = ""; // Clé API master fournie par le backend
 
 //--- Globals
-// On utilise un tableau pour suivre les tickets ouverts
-ulong    G_ActiveTickets[];
+struct TrackedTrade
+{
+   ulong ticket;
+   string symbol;
+   string trade_type;
+   double volume;
+   double open_price;
+   double sl;
+   double tp;
+};
+
+TrackedTrade G_ActiveTrades[];
+
+string BuildClientLogin()
+{
+   string clientLogin = InpClientLogin;
+   if(StringLen(clientLogin) == 0)
+      return "";
+
+   if(StringFind(clientLogin, "_") >= 0)
+      return clientLogin;
+
+   return clientLogin + "_" + InpClientBroker + "_" + InpClientServer + "_" + InpClientAccountType;
+}
 
 //+------------------------------------------------------------------+
 //| Expert initialization function                                   |
@@ -25,6 +52,27 @@ int OnInit()
    string login = InpLogin;
    if(login=="") login = IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN));
    Print("FrappedDollars EA v1.11 démarré pour le compte: ", login, " (type: ", InpAccountType, ")");
+
+   if(StringLen(InpClientLogin) == 0) {
+      Alert("ERREUR: InpClientLogin est vide. Renseigne le login client cible avant de lancer l'EA maître.");
+      ExpertRemove();
+      return(INIT_FAILED);
+   }
+
+   if(StringLen(InpApiKey) == 0) {
+      Alert("ERREUR: InpApiKey est vide. Renseigne la clé API master fournie par le backend.");
+      ExpertRemove();
+      return(INIT_FAILED);
+   }
+
+   string resolvedClientLogin = BuildClientLogin();
+   if(StringLen(resolvedClientLogin) == 0) {
+      Alert("ERREUR: InpClientLogin est vide. Renseigne le login client cible avant de lancer l'EA maître.");
+      ExpertRemove();
+      return(INIT_FAILED);
+   }
+
+   Print("FrappedDollars EA v1.11 client_login resolu: ", resolvedClientLogin);
 
    // Sécurité stricte : doit être lancé sur le compte maître 6048965
    if(login != "6048965") {
@@ -58,8 +106,6 @@ void OnTradeTransaction(const MqlTradeTransaction& trans,
    }
 }
 
-void OnTick() { SyncTrades(); } // Sécurité supplémentaire
-
 //+------------------------------------------------------------------+
 //| Synchronize trades with Backend                                  |
 //+------------------------------------------------------------------+
@@ -74,43 +120,38 @@ void SyncTrades()
       if(!IsTicketInList(ticket))
       {
          if(PositionSelectByTicket(ticket)) {
-            string symbol = PositionGetString(POSITION_SYMBOL);
-            string trade_type = (PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY)?"BUY":"SELL";
-            double volume = PositionGetDouble(POSITION_VOLUME);
-            double open_price = PositionGetDouble(POSITION_PRICE_OPEN);
-            double tp = PositionGetDouble(POSITION_TP);
-            double sl = PositionGetDouble(POSITION_SL);
-            SendToAPI(ticket, "OPEN", symbol, trade_type, volume, open_price, sl, tp);
+            TrackedTrade trade;
+            trade.ticket = ticket;
+            trade.symbol = PositionGetString(POSITION_SYMBOL);
+            trade.trade_type = (PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY)?"BUY":"SELL";
+            trade.volume = PositionGetDouble(POSITION_VOLUME);
+            trade.open_price = PositionGetDouble(POSITION_PRICE_OPEN);
+            trade.tp = PositionGetDouble(POSITION_TP);
+            trade.sl = PositionGetDouble(POSITION_SL);
+            AddTradeToList(trade);
+            SendToAPI(trade.ticket, "OPEN", trade.symbol, trade.trade_type, trade.volume, trade.open_price, trade.sl, trade.tp);
          }
-         AddTicketToList(ticket);
       }
    }
 
    // 2. Détecter les trades FERMÉS
-   for(int i=ArraySize(G_ActiveTickets)-1; i>=0; i--)
+   for(int i=ArraySize(G_ActiveTrades)-1; i>=0; i--)
    {
-      ulong ticket = G_ActiveTickets[i];
-      // On capture les infos AVANT suppression (si possible)
-      string symbol = "";
-      string trade_type = "";
-      double volume = 0;
-      double open_price = 0;
-      double tp = 0;
-      double sl = 0;
-      bool found = PositionSelectByTicket(ticket);
-      if(found) {
-         symbol = PositionGetString(POSITION_SYMBOL);
-         trade_type = (PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY)?"BUY":"SELL";
-         volume = PositionGetDouble(POSITION_VOLUME);
-         open_price = PositionGetDouble(POSITION_PRICE_OPEN);
-         tp = PositionGetDouble(POSITION_TP);
-         sl = PositionGetDouble(POSITION_SL);
-      }
+      ulong ticket = G_ActiveTrades[i].ticket;
       if(!PositionSelectByTicket(ticket))
       {
          // On envoie le CLOSE avec les dernières infos connues
-         SendToAPI(ticket, "CLOSE", symbol, trade_type, volume, open_price, sl, tp);
-         RemoveTicketFromList(i);
+         SendToAPI(
+            ticket,
+            "CLOSE",
+            G_ActiveTrades[i].symbol,
+            G_ActiveTrades[i].trade_type,
+            G_ActiveTrades[i].volume,
+            G_ActiveTrades[i].open_price,
+            G_ActiveTrades[i].sl,
+            G_ActiveTrades[i].tp
+         );
+         RemoveTradeFromList(i);
       }
    }
 
@@ -122,7 +163,9 @@ void SendToAPI(ulong ticket, string action, string symbol, string trade_type, do
 {
    string login = InpLogin;
    if(login=="") login = IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN));
+   string clientLogin = BuildClientLogin();
    string json = "{";
+   json += "\"client_login\":\"" + clientLogin + "\",";
    json += "\"master_login\":\"" + login + "\",";
    json += "\"ticket_id\":\"" + IntegerToString(ticket) + "\",";
    json += "\"action\":\"" + action + "\",";
@@ -136,27 +179,33 @@ void SendToAPI(ulong ticket, string action, string symbol, string trade_type, do
    Print("JSON envoyé à l’API:", json);
    char data[], result[];
    string headers = "Content-Type: application/json\r\n";
+   if(StringLen(InpApiKey) > 0)
+      headers += "x-api-key: " + InpApiKey + "\r\n";
    int jsonLen = StringLen(json);
    ArrayResize(data, jsonLen);
    StringToCharArray(json, data, 0, jsonLen, CP_UTF8);
-   int res = WebRequest("POST", InpBackendUrl + "/master/trade", headers, 1000, data, result, headers);
-   if(res==200) Print("Trade envoyé: ", json);
-   else Print("Erreur envoi trade: ", GetLastError());
+   string response_headers = "";
+   int res = WebRequest("POST", InpBackendUrl + "/master/trade", headers, 5000, data, result, response_headers);
+   string response_body = CharArrayToString(result, 0, -1, CP_UTF8);
+   if(res==200)
+      Print("Trade envoyé: ", json, " body=", response_body);
+   else
+      Print("Erreur envoi trade: ", GetLastError(), " http=", res, " body=", response_body);
 }
 
 
 //--- Helpers pour la gestion de la liste locale
 bool IsTicketInList(ulong ticket) {
-   for(int i=0; i<ArraySize(G_ActiveTickets); i++) if(G_ActiveTickets[i] == ticket) return true;
+   for(int i=0; i<ArraySize(G_ActiveTrades); i++) if(G_ActiveTrades[i].ticket == ticket) return true;
    return false;
 }
-void AddTicketToList(ulong ticket) {
-   int size = ArraySize(G_ActiveTickets);
-   ArrayResize(G_ActiveTickets, size+1);
-   G_ActiveTickets[size] = ticket;
+void AddTradeToList(const TrackedTrade &trade) {
+   int size = ArraySize(G_ActiveTrades);
+   ArrayResize(G_ActiveTrades, size+1);
+   G_ActiveTrades[size] = trade;
 }
-void RemoveTicketFromList(int index) {
-   int size = ArraySize(G_ActiveTickets);
-   for(int i=index; i<size-1; i++) G_ActiveTickets[i] = G_ActiveTickets[i+1];
-   ArrayResize(G_ActiveTickets, size-1);
+void RemoveTradeFromList(int index) {
+   int size = ArraySize(G_ActiveTrades);
+   for(int i=index; i<size-1; i++) G_ActiveTrades[i] = G_ActiveTrades[i+1];
+   ArrayResize(G_ActiveTrades, size-1);
 }

@@ -7,10 +7,13 @@ import os
 import secrets
 import sqlite3
 from threading import Lock
-from typing import Any
+from typing import Any, Generator
 from uuid import uuid4
 
 from backend.trade_identity import build_trade_identity
+
+
+MAX_DISPATCH_RETRIES = int(os.getenv("MAX_DISPATCH_RETRIES", "10"))
 
 
 def utc_now() -> str:
@@ -29,7 +32,7 @@ class SQLiteStorage:
         self._initialize()
 
     @contextmanager
-    def connection(self) -> sqlite3.Connection:
+    def connection(self) -> Generator[sqlite3.Connection, None, None]:
         connection = sqlite3.connect(self.db_path, timeout=30, isolation_level=None)
         connection.row_factory = sqlite3.Row
         try:
@@ -232,21 +235,48 @@ class SQLiteStorage:
         cutoff = (datetime.now(timezone.utc) - timedelta(seconds=lease_timeout_seconds)).isoformat()
         with self._lock, self.connection() as conn:
             conn.execute("BEGIN IMMEDIATE")
-            result = conn.execute(
+            rows = conn.execute(
                 """
-                UPDATE trade_dispatches
-                SET status = 'RETRY',
-                    retry_count = retry_count + 1,
-                    last_error = 'Dispatch lease expired',
-                    updated_at = ?
+                SELECT id, retry_count
+                FROM trade_dispatches
                 WHERE client_login = ?
                   AND status = 'DISPATCHED'
                   AND dispatched_at IS NOT NULL
                   AND dispatched_at <= ?
+                ORDER BY created_at ASC
                 """,
-                (utc_now(), client_login, cutoff),
-            )
-            affected = result.rowcount
+                (client_login, cutoff),
+            ).fetchall()
+
+            affected = 0
+            now = utc_now()
+            for row in rows:
+                trade_id = row["id"]
+                next_retry_count = int(row["retry_count"]) + 1
+                if next_retry_count >= MAX_DISPATCH_RETRIES:
+                    conn.execute(
+                        """
+                        UPDATE trade_dispatches
+                        SET status = 'CANCELLED',
+                            last_error = ?,
+                            updated_at = ?
+                        WHERE id = ?
+                        """,
+                        (f"Dispatch lease expired after {MAX_DISPATCH_RETRIES} retries", now, trade_id),
+                    )
+                else:
+                    conn.execute(
+                        """
+                        UPDATE trade_dispatches
+                        SET status = 'RETRY',
+                            retry_count = retry_count + 1,
+                            last_error = 'Dispatch lease expired',
+                            updated_at = ?
+                        WHERE id = ?
+                        """,
+                        (now, trade_id),
+                    )
+                affected += 1
             conn.commit()
         return affected
 

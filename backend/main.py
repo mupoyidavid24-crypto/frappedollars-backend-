@@ -138,9 +138,15 @@ def master_trade(
 
     existing = storage.get_dispatch_by_dedupe(payload.client_login, payload.ticket_id, payload.action)
     if existing is not None:
+        print(
+            f"[MASTER_TRADE] duplicate client_login={payload.client_login} master_login={payload.master_login} ticket_id={payload.ticket_id} action={payload.action} status={existing.get('status')}"
+        )
         return {"item": existing, "duplicate": True}
 
     created = storage.create_dispatch(payload.model_dump())
+    print(
+        f"[MASTER_TRADE] created client_login={payload.client_login} master_login={payload.master_login} ticket_id={payload.ticket_id} action={payload.action} symbol={payload.symbol} trade_type={payload.trade_type} volume={payload.volume} dispatch_id={created.get('id')} status={created.get('status')}"
+    )
     return {"item": created, "duplicate": False}
 
 
@@ -152,7 +158,9 @@ def client_pending_trades(
 ) -> dict[str, Any]:
     _verify_ea_api_key(mt5_login, x_api_key, expected_role="CLIENT")
     storage.requeue_stale_dispatches(mt5_login, DISPATCH_LEASE_SECONDS)
-    return {"version": "v1", "items": storage.claim_dispatches(mt5_login, limit)}
+    items = storage.claim_dispatches(mt5_login, limit)
+    print(f"[CLIENT_PULL] mt5_login={mt5_login} limit={limit} items={len(items)}")
+    return {"version": "v1", "items": items}
 
 
 @app.post("/client/trade_executed")
@@ -190,6 +198,9 @@ def trade_executed(
                 f"Le trade {payload.trade_id} pour {payload.client_login} n'est pas dans l'etat attendu DISPATCHED."
             ),
         )
+    print(
+        f"[CLIENT_ACK] executed client_login={payload.client_login} trade_id={payload.trade_id} client_ticket_id={payload.client_ticket_id}"
+    )
     return {"item": row}
 
 
@@ -226,6 +237,9 @@ def trade_failed(
                 f"Le trade {payload.trade_id} pour {payload.client_login} n'est pas dans l'etat attendu DISPATCHED."
             ),
         )
+    print(
+        f"[CLIENT_ACK] failed client_login={payload.client_login} trade_id={payload.trade_id} error={payload.error_message}"
+    )
     return {"item": row}
 
 
@@ -235,7 +249,9 @@ def generate_api_key(
     admin_key: str = Depends(_require_admin_key),
 ) -> dict[str, str]:
     del admin_key
-    return storage.issue_api_key(payload.mt5_login, payload.account_role)
+    result = storage.issue_api_key(payload.mt5_login, payload.account_role)
+    print(f"[API_KEY] issued mt5_login={payload.mt5_login} role={payload.account_role}")
+    return result
 
 
 @app.get("/admin/trade_dispatches")
