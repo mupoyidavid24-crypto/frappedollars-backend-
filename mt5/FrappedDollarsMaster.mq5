@@ -5,16 +5,12 @@
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2024, FrappedDollars"
 #property link      "https://frappeddollars.com"
-#property version   "1.11"
+#property version   "1.12"
 #property strict
 
 //--- Input parameters
 input string   InpBackendUrl   = "https://frappedollars-backend-1.onrender.com";
 input string   InpLogin        = ""; // Laisser vide pour auto, ou mettre le login voulu
-input string   InpClientLogin  = ""; // Login du client cible à copier
-input string   InpClientBroker = "Deriv"; // Broker du client cible
-input string   InpClientServer = "Demo"; // Serveur du client cible
-input string   InpClientAccountType = "DEMO"; // Type de compte du client cible
 input string   InpAccountType  = "MASTER"; // MASTER ou CLIENT
 input string   InpApiKey       = ""; // Clé API master fournie par le backend
 
@@ -32,18 +28,6 @@ struct TrackedTrade
 
 TrackedTrade G_ActiveTrades[];
 
-string BuildClientLogin()
-{
-   string clientLogin = InpClientLogin;
-   if(StringLen(clientLogin) == 0)
-      return "";
-
-   if(StringFind(clientLogin, "_") >= 0)
-      return clientLogin;
-
-   return clientLogin + "_" + InpClientBroker + "_" + InpClientServer + "_" + InpClientAccountType;
-}
-
 //+------------------------------------------------------------------+
 //| Expert initialization function                                   |
 //+------------------------------------------------------------------+
@@ -51,28 +35,13 @@ int OnInit()
 {
    string login = InpLogin;
    if(login=="") login = IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN));
-   Print("FrappedDollars EA v1.11 démarré pour le compte: ", login, " (type: ", InpAccountType, ")");
-
-   if(StringLen(InpClientLogin) == 0) {
-      Alert("ERREUR: InpClientLogin est vide. Renseigne le login client cible avant de lancer l'EA maître.");
-      ExpertRemove();
-      return(INIT_FAILED);
-   }
+   Print("FrappedDollars EA v1.12 démarré pour le compte: ", login, " (type: ", InpAccountType, ")");
 
    if(StringLen(InpApiKey) == 0) {
       Alert("ERREUR: InpApiKey est vide. Renseigne la clé API master fournie par le backend.");
       ExpertRemove();
       return(INIT_FAILED);
    }
-
-   string resolvedClientLogin = BuildClientLogin();
-   if(StringLen(resolvedClientLogin) == 0) {
-      Alert("ERREUR: InpClientLogin est vide. Renseigne le login client cible avant de lancer l'EA maître.");
-      ExpertRemove();
-      return(INIT_FAILED);
-   }
-
-   Print("FrappedDollars EA v1.11 client_login resolu: ", resolvedClientLogin);
 
    // Sécurité stricte : doit être lancé sur le compte maître 6048965
    if(login != "6048965") {
@@ -163,9 +132,7 @@ void SendToAPI(ulong ticket, string action, string symbol, string trade_type, do
 {
    string login = InpLogin;
    if(login=="") login = IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN));
-   string clientLogin = BuildClientLogin();
    string json = "{";
-   json += "\"client_login\":\"" + clientLogin + "\",";
    json += "\"master_login\":\"" + login + "\",";
    json += "\"ticket_id\":\"" + IntegerToString(ticket) + "\",";
    json += "\"action\":\"" + action + "\",";

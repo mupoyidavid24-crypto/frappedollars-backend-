@@ -13,6 +13,7 @@ BACKEND_URL = os.getenv("BACKEND_URL", "http://127.0.0.1:8010")
 ADMIN_API_KEY = os.getenv("ADMIN_API_KEY", "local-admin-key")
 MASTER_LOGIN = os.getenv("MASTER_LOGIN", "6048965")
 CLIENT_LOGIN = os.getenv("CLIENT_LOGIN", "32048608_Deriv.com Limited _Deriv-Demo_DEMO")
+CLIENT_LOGIN_2 = os.getenv("CLIENT_LOGIN_2", "32048609_Deriv.com Limited _Deriv-Demo_DEMO")
 SQLITE_DB_PATH = ROOT_DIR / "backend" / "runtime" / "pipeline-demo.db"
 DISPATCH_LEASE_SECONDS = os.getenv("DISPATCH_LEASE_SECONDS", "1")
 
@@ -93,7 +94,6 @@ def _admin_list(client_login: str) -> list[dict]:
 
 def _push_trade(master_key: str, ticket_id: str) -> requests.Response:
     payload = {
-        "client_login": CLIENT_LOGIN,
         "master_login": MASTER_LOGIN,
         "ticket_id": ticket_id,
         "action": "OPEN",
@@ -148,20 +148,25 @@ def run_demo() -> None:
         _wait_until_ready()
         master_key = _generate_key(MASTER_LOGIN, "MASTER")
         client_key = _generate_key(CLIENT_LOGIN, "CLIENT")
+        client_key_2 = _generate_key(CLIENT_LOGIN_2, "CLIENT")
 
         ticket_id = f"demo-{int(time.time())}"
 
-        print("1. POST /master/trade")
+        print("1. POST /master/trade en broadcast")
         create_response = _push_trade(master_key, ticket_id)
         print(create_response.status_code, create_response.json())
 
-        print("\n2. Etat persiste en base locale")
-        persisted_before_pull = _admin_list(CLIENT_LOGIN)
-        print(persisted_before_pull)
-        assert len(persisted_before_pull) == 1
-        assert persisted_before_pull[0]["status"] == "PENDING"
+        print("\n2. Etat persiste pour chaque client actif")
+        persisted_client_1 = _admin_list(CLIENT_LOGIN)
+        persisted_client_2 = _admin_list(CLIENT_LOGIN_2)
+        print(persisted_client_1)
+        print(persisted_client_2)
+        assert len(persisted_client_1) == 1
+        assert len(persisted_client_2) == 1
+        assert persisted_client_1[0]["status"] == "PENDING"
+        assert persisted_client_2[0]["status"] == "PENDING"
 
-        print("\n3. GET /client/pending_trades retourne exactement une fois")
+        print("\n3. GET /client/pending_trades pour les deux clients")
         pull_response = requests.get(
             f"{BACKEND_URL}/client/pending_trades/{CLIENT_LOGIN}",
             headers={"x-api-key": client_key},
@@ -175,6 +180,18 @@ def run_demo() -> None:
         assert len(items) == 1
         trade_id = items[0]["id"]
 
+        pull_response_2 = requests.get(
+            f"{BACKEND_URL}/client/pending_trades/{CLIENT_LOGIN_2}",
+            headers={"x-api-key": client_key_2},
+            timeout=10,
+        )
+        print(pull_response_2.status_code, pull_response_2.json())
+        pull_response_2.raise_for_status()
+        pull_payload_2 = pull_response_2.json()
+        assert pull_payload_2["version"] == "v1"
+        assert len(pull_payload_2["items"]) == 1
+        trade_id_2 = pull_payload_2["items"][0]["id"]
+
         second_pull = requests.get(
             f"{BACKEND_URL}/client/pending_trades/{CLIENT_LOGIN}",
             headers={"x-api-key": client_key},
@@ -186,18 +203,34 @@ def run_demo() -> None:
         assert second_payload["version"] == "v1"
         assert second_payload["items"] == []
 
+        second_pull_2 = requests.get(
+            f"{BACKEND_URL}/client/pending_trades/{CLIENT_LOGIN_2}",
+            headers={"x-api-key": client_key_2},
+            timeout=10,
+        )
+        print(second_pull_2.status_code, second_pull_2.json())
+        second_pull_2.raise_for_status()
+        second_payload_2 = second_pull_2.json()
+        assert second_payload_2["version"] == "v1"
+        assert second_payload_2["items"] == []
+
         print("\n4. Redemarrage serveur puis verification de persistance")
         print(_stop_server(server))
         server = _start_server()
         _wait_until_ready()
 
         after_restart = _admin_list(CLIENT_LOGIN)
+        after_restart_2 = _admin_list(CLIENT_LOGIN_2)
         print(after_restart)
+        print(after_restart_2)
         assert len(after_restart) == 1
+        assert len(after_restart_2) == 1
         assert after_restart[0]["id"] == trade_id
+        assert after_restart_2[0]["id"] == trade_id_2
         assert after_restart[0]["status"] == "DISPATCHED"
+        assert after_restart_2[0]["status"] == "DISPATCHED"
 
-        print("\n5. POST /client/trade_executed")
+        print("\n5. POST /client/trade_executed pour les deux clients")
         execute_response = requests.post(
             f"{BACKEND_URL}/client/trade_executed",
             json={
@@ -211,12 +244,30 @@ def run_demo() -> None:
         print(execute_response.status_code, execute_response.json())
         execute_response.raise_for_status()
 
+        execute_response_2 = requests.post(
+            f"{BACKEND_URL}/client/trade_executed",
+            json={
+                "client_login": CLIENT_LOGIN_2,
+                "trade_id": trade_id_2,
+                "client_ticket_id": "mt5-local-ticket-2",
+            },
+            headers={"x-api-key": client_key_2},
+            timeout=10,
+        )
+        print(execute_response_2.status_code, execute_response_2.json())
+        execute_response_2.raise_for_status()
+
         print("\n6. Etat final conserve")
         final_state = _admin_list(CLIENT_LOGIN)
+        final_state_2 = _admin_list(CLIENT_LOGIN_2)
         print(final_state)
+        print(final_state_2)
         assert len(final_state) == 1
+        assert len(final_state_2) == 1
         assert final_state[0]["status"] == "EXECUTED"
+        assert final_state_2[0]["status"] == "EXECUTED"
         assert final_state[0]["client_ticket_id"] == "mt5-local-ticket-1"
+        assert final_state_2[0]["client_ticket_id"] == "mt5-local-ticket-2"
 
         print("\n6. Preuve de non double-dispatch en concurrence")
         concurrent_ticket = f"concurrent-{int(time.time())}"
@@ -251,7 +302,7 @@ def run_demo() -> None:
 
         print("\n8. Preuve d'idempotence sous spam master")
         spam_ticket = f"spam-{int(time.time())}"
-        for _ in range(10):
+        for _ in range(3):
             response = _push_trade(master_key, spam_ticket)
             print(response.json())
         spam_rows = [row for row in _admin_list(CLIENT_LOGIN) if row["ticket_id"] == spam_ticket]

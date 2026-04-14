@@ -7,9 +7,11 @@ class AuthProvider extends ChangeNotifier {
   
   Profile? _userProfile;
   bool _isLoading = false;
+  String? _registerMessage;
 
   Profile? get userProfile => _userProfile;
   bool get isLoading => _isLoading;
+  String? get registerMessage => _registerMessage;
 
   /// Initialise l'authentification en vérifiant si une session existe déjà
   Future<void> initializeAuth() async {
@@ -54,13 +56,16 @@ class AuthProvider extends ChangeNotifier {
 
   Future<bool> register(String email, String password) async {
     _setLoading(true);
+    _registerMessage = null;
     try {
       final response = await _supabaseService.signUp(email, password);
-      if (response.user != null) {
-        // Le profil est créé via le trigger SQL dans Supabase
-        return true;
-      }
+      _registerMessage = response.user == null
+          ? "Compte créé. Vérifiez votre email pour activer le compte."
+          : "Compte créé. Vérifiez votre email pour activer le compte.";
+      notifyListeners();
+      return true;
     } catch (e) {
+      _registerMessage = e.toString();
       debugPrint("Register Error: $e");
     } finally {
       _setLoading(false);

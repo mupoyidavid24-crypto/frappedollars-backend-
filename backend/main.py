@@ -48,7 +48,6 @@ app.add_middleware(
 class MasterTradePayload(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
-    client_login: str = Field(min_length=1)
     master_login: str = Field(min_length=1)
     ticket_id: str = Field(min_length=1)
     action: Literal["OPEN", "CLOSE"]
@@ -145,6 +144,7 @@ def monitoring_status(admin_key: str = Depends(_require_admin_key)) -> dict[str,
     return {
         "dispatch_status_counts": storage.monitoring_counts(),
         "dispatchable_statuses": DISPATCHABLE_STATUSES,
+        "active_client_count": len(storage.list_active_client_logins()),
     }
 
 
@@ -155,18 +155,19 @@ def master_trade(
 ) -> dict[str, Any]:
     _verify_ea_api_key(payload.master_login, x_api_key, expected_role="MASTER")
 
-    existing = storage.get_dispatch_by_dedupe(payload.client_login, payload.ticket_id, payload.action)
-    if existing is not None:
+    result = storage.create_and_fanout_master_trade_signal(payload.model_dump())
+    signal = result["signal"]
+    dispatches = result["dispatches"]
+    if result.get("duplicate"):
         print(
-            f"[MASTER_TRADE] duplicate client_login={payload.client_login} master_login={payload.master_login} ticket_id={payload.ticket_id} action={payload.action} status={existing.get('status')}"
+            f"[MASTER_TRADE] duplicate master_login={payload.master_login} ticket_id={payload.ticket_id} action={payload.action} status={signal.get('status')}"
         )
-        return {"item": existing, "duplicate": True}
+        return {"item": signal, "duplicate": True, "dispatches_created": 0}
 
-    created = storage.create_dispatch(payload.model_dump())
     print(
-        f"[MASTER_TRADE] created client_login={payload.client_login} master_login={payload.master_login} ticket_id={payload.ticket_id} action={payload.action} symbol={payload.symbol} trade_type={payload.trade_type} volume={payload.volume} dispatch_id={created.get('id')} status={created.get('status')}"
+        f"[MASTER_TRADE] created master_login={payload.master_login} ticket_id={payload.ticket_id} action={payload.action} symbol={payload.symbol} trade_type={payload.trade_type} volume={payload.volume} signal_id={signal.get('id')} dispatches={len(dispatches)}"
     )
-    return {"item": created, "duplicate": False}
+    return {"item": signal, "duplicate": False, "dispatches_created": len(dispatches)}
 
 
 @app.get("/client/pending_trades/{mt5_login}")

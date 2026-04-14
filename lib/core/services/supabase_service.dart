@@ -1,4 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../constants/constants.dart';
 import '../../models/profile_model.dart';
 import '../../models/trading_account_model.dart';
 import '../../models/subscription_model.dart';
@@ -10,7 +11,11 @@ class SupabaseService {
   // -- AUTHENTICATION --
 
   Future<AuthResponse> signUp(String email, String password) async {
-    return await _client.auth.signUp(email: email, password: password);
+    return await _client.auth.signUp(
+      email: email,
+      password: password,
+      emailRedirectTo: AppConstants.authRedirectUrl,
+    );
   }
 
   Future<AuthResponse> signIn(String email, String password) async {

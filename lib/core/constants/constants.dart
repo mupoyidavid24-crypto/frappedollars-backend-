@@ -1,14 +1,13 @@
 class AppConstants {
-  static const String backendBaseUrl = String.fromEnvironment(
-    'BACKEND_BASE_URL',
-    defaultValue: 'https://frappedollars-backend-1.onrender.com',
-  );
+  static const String backendBaseUrl = 'https://frappedollars-backend-1.onrender.com';
+  static const String appWebUrl = 'https://frappedollars.netlify.app';
 
   static const String adminBaseUrl = '$backendBaseUrl/admin';
+  static const String authRedirectUrl = '$appWebUrl/auth/callback';
 
-  // Vos vraies clés Supabase
+  // Configuration Supabase du projet FrappedDollars.
   static const String supabaseUrl = 'https://lllkrhivavsujgcfhcls.supabase.co';
-  static const String supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxsbGtyaGl2YXZzdWpnY2ZoY2xzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIxMjkzNDcsImV4cCI6MjA4NzcwNTM0N30.31rAqX7VU1g5AgOpC-9XzPMq1b6tcawg4JgU9NkGa2Y';
+  static const String supabaseAnonKey = 'sb_publishable_SA2ex7Iy0bUPvowzcHyJNg_e5EPBdiH';
   static const String supabasePublishableKey = 'sb_publishable_SA2ex7Iy0bUPvowzcHyJNg_e5EPBdiH';
 
   // Couleurs de l'application
