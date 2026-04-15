@@ -276,6 +276,19 @@ CREATE POLICY "Users can manage own support tickets" ON support_tickets FOR ALL 
 DROP POLICY IF EXISTS "Everyone can view learning content" ON learning_content;
 CREATE POLICY "Everyone can view learning content" ON learning_content FOR SELECT USING (true);
 
+-- Copied Trades: Users can view trades for their own trading account
+DROP POLICY IF EXISTS "Users can view own copied trades" ON copied_trades;
+CREATE POLICY "Users can view own copied trades" ON copied_trades
+FOR SELECT
+USING (
+    EXISTS (
+        SELECT 1
+        FROM trading_accounts ta
+        WHERE ta.id = copied_trades.client_account_id
+            AND ta.user_id = auth.uid()
+    )
+);
+
 -- Auth Trigger
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
