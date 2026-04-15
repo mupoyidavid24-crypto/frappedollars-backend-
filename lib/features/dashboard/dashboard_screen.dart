@@ -401,7 +401,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
               onPressed: () async {
                 final url = await Provider.of<DashboardProvider>(context, listen: false)
                     .downloadEa(account.mt5Login, userId);
-                if (url != null && context.mounted) {
+                if (url == 'downloaded' && context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('EA téléchargé sur votre appareil.')),
+                  );
+                } else if (url != null && context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Lien de téléchargement généré.')),
                   );
