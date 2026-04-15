@@ -51,6 +51,7 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.dark,
+        fontFamily: 'Arial',
         scaffoldBackgroundColor: const Color(AppConstants.backgroundColor),
         colorScheme: ColorScheme.fromSeed(
           seedColor: const Color(AppConstants.primaryColor),

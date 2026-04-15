@@ -1,6 +1,6 @@
 class AppConstants {
   static const String backendBaseUrl = 'https://frappedollars-backend-1.onrender.com';
-  static const String appWebUrl = 'https://frappedollars.netlify.app';
+  static const String appWebUrl = 'https://frappe-dollars.web.app';
 
   static const String adminBaseUrl = '$backendBaseUrl/admin';
   static const String authRedirectUrl = '$appWebUrl/auth/callback';

@@ -32,7 +32,10 @@ class AdminApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Admin Centre de contrôle',
-      theme: ThemeData(primarySwatch: Colors.blue),
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+        fontFamily: 'Arial',
+      ),
       initialRoute: '/admin/dashboard',
       routes: {
         '/admin/dashboard': (context) => AdminDashboardScreen(),
