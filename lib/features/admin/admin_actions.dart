@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../../core/constants/constants.dart';
+import '../../core/features/admin/admin_auth.dart';
 
 class AdminActions extends StatefulWidget {
   const AdminActions({super.key});
@@ -21,7 +22,7 @@ class _AdminActionsState extends State<AdminActions> {
     final method = {"name": _paymentMethodController.text};
     final response = await http.post(
       Uri.parse('${AppConstants.adminBaseUrl}/add_payment_method'),
-      headers: {'Content-Type': 'application/json'},
+      headers: AdminAuth.headers(jsonContent: true),
       body: json.encode(method),
     );
     setState(() {
@@ -33,6 +34,7 @@ class _AdminActionsState extends State<AdminActions> {
     final userId = _userIdController.text;
     final response = await http.post(
       Uri.parse('${AppConstants.adminBaseUrl}/block_user/$userId'),
+      headers: AdminAuth.headers(),
     );
     setState(() {
       _result = response.statusCode == 200 ? 'Compte bloqué.' : 'Erreur: ${response.body}';
@@ -43,7 +45,7 @@ class _AdminActionsState extends State<AdminActions> {
     final vipId = _vipClientIdController.text;
     final response = await http.post(
       Uri.parse('${AppConstants.adminBaseUrl}/add_vip_client'),
-      headers: {'Content-Type': 'application/json'},
+      headers: AdminAuth.headers(jsonContent: true),
       body: json.encode({"id": vipId}),
     );
     setState(() {
@@ -55,6 +57,7 @@ class _AdminActionsState extends State<AdminActions> {
     final clientId = _syncClientIdController.text;
     final response = await http.post(
       Uri.parse('${AppConstants.adminBaseUrl}/sync_with_master/$clientId'),
+      headers: AdminAuth.headers(),
     );
     setState(() {
       _result = response.statusCode == 200 ? 'Synchronisation réussie.' : 'Erreur: ${response.body}';
@@ -105,6 +108,12 @@ class _AdminActionsState extends State<AdminActions> {
               onPressed: _syncWithMaster,
               child: const Text('Synchroniser avec compte master'),
             ),
+            const SizedBox(height: 16),
+            if (AdminAuth.adminKey == null)
+              const Text(
+                'Aucune clé admin chargée. Renseigne-la dans le dashboard avant d’utiliser les actions.',
+                style: TextStyle(color: Colors.orange),
+              ),
             if (_result != null) ...[
               const SizedBox(height: 16),
               Text(_result!, style: const TextStyle(color: Colors.blue)),

@@ -248,6 +248,7 @@ $$;
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE trading_accounts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE subscriptions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE signals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE support_tickets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE learning_content ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ea_api_keys ENABLE ROW LEVEL SECURITY;
@@ -285,6 +286,20 @@ USING (
         SELECT 1
         FROM trading_accounts ta
         WHERE ta.id = copied_trades.client_account_id
+            AND ta.user_id = auth.uid()
+    )
+);
+
+-- Signals: Users can view signals linked to their own copied trades
+DROP POLICY IF EXISTS "Users can view linked signals" ON signals;
+CREATE POLICY "Users can view linked signals" ON signals
+FOR SELECT
+USING (
+    EXISTS (
+        SELECT 1
+        FROM copied_trades ct
+        JOIN trading_accounts ta ON ta.id = ct.client_account_id
+        WHERE ct.signal_id = signals.id
             AND ta.user_id = auth.uid()
     )
 );

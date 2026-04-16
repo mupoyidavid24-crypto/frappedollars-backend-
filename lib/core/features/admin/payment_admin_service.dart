@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../../constants/constants.dart';
+import 'admin_auth.dart';
 
 class PaymentAdminService {
   static String get baseUrl => AppConstants.adminBaseUrl;
@@ -8,7 +9,7 @@ class PaymentAdminService {
   // Récupérer la liste des paiements
   static Future<List<Map<String, dynamic>>> fetchPayments() async {
     try {
-      final response = await http.get(Uri.parse('$baseUrl/payments'));
+      final response = await http.get(Uri.parse('$baseUrl/payments'), headers: AdminAuth.headers());
       if (response.statusCode == 200) {
         return List<Map<String, dynamic>>.from(json.decode(response.body));
       } else {
@@ -23,7 +24,10 @@ class PaymentAdminService {
   // Valider un paiement
   static Future<bool> validatePayment(String paymentId) async {
     try {
-      final response = await http.post(Uri.parse('$baseUrl/payments/validate/$paymentId'));
+      final response = await http.post(
+        Uri.parse('$baseUrl/payments/validate/$paymentId'),
+        headers: AdminAuth.headers(),
+      );
       if (response.statusCode == 200) return true;
       final msg = _extractError(response);
       throw Exception('Erreur validation: $msg');
@@ -38,7 +42,7 @@ class PaymentAdminService {
       final response = await http.post(
         Uri.parse('$baseUrl/payments/refuse/$paymentId'),
         body: json.encode({'motif': motif}),
-        headers: {'Content-Type': 'application/json'},
+        headers: AdminAuth.headers(jsonContent: true),
       );
       if (response.statusCode == 200) return true;
       final msg = _extractError(response);

@@ -7,10 +7,12 @@ import 'admin_notifications_screen.dart';
 import 'admin_vip_screen.dart';
 import 'admin_copytrading_screen.dart';
 import 'admin_logs_screen.dart';
+import '../../../features/admin/admin_login_screen.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../constants/constants.dart';
+import 'admin_auth.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,6 +23,7 @@ void main() async {
     url: AppConstants.supabaseUrl,
     anonKey: AppConstants.supabaseAnonKey,
   );
+  await AdminAuth.loadPersistedKey();
   runApp(const AdminApp());
   setupFCM();
 }
@@ -36,8 +39,9 @@ class AdminApp extends StatelessWidget {
         primarySwatch: Colors.blue,
         fontFamily: 'Arial',
       ),
-      initialRoute: '/admin/dashboard',
+      initialRoute: AdminAuth.adminKey != null ? '/admin/dashboard' : '/admin/login',
       routes: {
+        '/admin/login': (context) => const AdminLoginScreen(),
         '/admin/dashboard': (context) => AdminDashboardScreen(),
         '/admin/payments': (context) => AdminPaymentsScreen(),
         '/admin/notifications': (context) => const AdminNotificationsScreen(),

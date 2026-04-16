@@ -14,12 +14,22 @@ class _SupportScreenState extends State<SupportScreen> {
   final _messageController = TextEditingController();
   bool _isLoading = false;
 
+  String? get _currentUserId => Supabase.instance.client.auth.currentUser?.id;
+
   Future<void> _submitTicket() async {
     if (_subjectController.text.isEmpty || _messageController.text.isEmpty) return;
+    final userId = _currentUserId;
+    if (userId == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Session non disponible. Recharge la page.')),
+        );
+      }
+      return;
+    }
     
     setState(() => _isLoading = true);
     try {
-      final userId = Supabase.instance.client.auth.currentUser!.id;
       await Supabase.instance.client.from('support_tickets').insert({
         'user_id': userId,
         'subject': _subjectController.text.trim(),
@@ -43,7 +53,22 @@ class _SupportScreenState extends State<SupportScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final userId = Supabase.instance.client.auth.currentUser!.id;
+    final userId = _currentUserId;
+
+    if (userId == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Support Client')),
+        body: Center(
+          child: Padding(
+            padding: EdgeInsets.all(24.0),
+            child: Text(
+              'Chargement de la session support...\nSi l’écran reste vide, recharge la page.',
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(title: const Text('Support Client')),

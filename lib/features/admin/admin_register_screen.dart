@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
 import '../../core/features/admin/admin_auth.dart';
-import 'admin_register_screen.dart';
 
-class AdminLoginScreen extends StatefulWidget {
-  const AdminLoginScreen({super.key});
+class AdminRegisterScreen extends StatefulWidget {
+  const AdminRegisterScreen({super.key});
 
   @override
-  State<AdminLoginScreen> createState() => _AdminLoginScreenState();
+  State<AdminRegisterScreen> createState() => _AdminRegisterScreenState();
 }
 
-class _AdminLoginScreenState extends State<AdminLoginScreen> {
+class _AdminRegisterScreenState extends State<AdminRegisterScreen> {
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _inviteCodeController = TextEditingController();
   bool _obscurePassword = true;
   bool _isLoading = false;
   String? _errorMessage;
@@ -20,16 +20,18 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
   void dispose() {
     _usernameController.dispose();
     _passwordController.dispose();
+    _inviteCodeController.dispose();
     super.dispose();
   }
 
-  Future<void> _handleAdminLogin() async {
+  Future<void> _handleRegister() async {
     final username = _usernameController.text.trim();
     final password = _passwordController.text;
+    final inviteCode = _inviteCodeController.text.trim();
 
-    if (username.isEmpty || password.isEmpty) {
+    if (username.isEmpty || password.isEmpty || inviteCode.isEmpty) {
       setState(() {
-        _errorMessage = 'Saisis le nom d’utilisateur et le mot de passe.';
+        _errorMessage = 'Remplis tous les champs.';
       });
       return;
     }
@@ -40,7 +42,11 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
     });
 
     try {
-      await AdminAuth.loginAdminAccount(username: username, password: password);
+      await AdminAuth.registerAdminAccount(
+        username: username,
+        password: password,
+        inviteCode: inviteCode,
+      );
       if (!mounted) return;
       Navigator.of(context).pushReplacementNamed('/admin/dashboard');
     } catch (e) {
@@ -82,17 +88,16 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        const Icon(Icons.admin_panel_settings,
-                            size: 72, color: Colors.blueGrey),
+                        const Icon(Icons.admin_panel_settings, size: 72, color: Colors.blueGrey),
                         const SizedBox(height: 20),
                         const Text(
-                          'Connexion Admin',
+                          'Créer un accès admin',
                           textAlign: TextAlign.center,
                           style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 8),
                         const Text(
-                          'Authentifie-toi pour accéder au dashboard administrateur.',
+                          'Un code d\'invitation est requis pour créer le compte administrateur.',
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 28),
@@ -100,7 +105,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                           controller: _usernameController,
                           textInputAction: TextInputAction.next,
                           decoration: const InputDecoration(
-                            labelText: 'Nom d’utilisateur',
+                            labelText: 'Nom d’utilisateur admin',
                             prefixIcon: Icon(Icons.person),
                           ),
                         ),
@@ -108,17 +113,22 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                         TextField(
                           controller: _passwordController,
                           obscureText: _obscurePassword,
-                          onSubmitted: (_) => _handleAdminLogin(),
                           decoration: InputDecoration(
                             labelText: 'Mot de passe',
                             prefixIcon: const Icon(Icons.lock_outline),
                             suffixIcon: IconButton(
-                              icon: Icon(_obscurePassword
-                                  ? Icons.visibility_off
-                                  : Icons.visibility),
-                              onPressed: () =>
-                                  setState(() => _obscurePassword = !_obscurePassword),
+                              icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
+                              onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                             ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        TextField(
+                          controller: _inviteCodeController,
+                          decoration: const InputDecoration(
+                            labelText: 'Code d’invitation',
+                            hintText: 'Requis pour activer le compte admin',
+                            prefixIcon: Icon(Icons.key),
                           ),
                         ),
                         const SizedBox(height: 20),
@@ -131,7 +141,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                           const SizedBox(height: 16),
                         ],
                         ElevatedButton(
-                          onPressed: _isLoading ? null : _handleAdminLogin,
+                          onPressed: _isLoading ? null : _handleRegister,
                           style: ElevatedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(vertical: 14),
                           ),
@@ -141,16 +151,12 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                                   width: 20,
                                   child: CircularProgressIndicator(strokeWidth: 2),
                                 )
-                              : const Text('Se connecter'),
+                              : const Text('Créer le compte admin'),
                         ),
                         const SizedBox(height: 12),
                         TextButton(
-                          onPressed: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(builder: (_) => const AdminRegisterScreen()),
-                            );
-                          },
-                          child: const Text('Créer un accès admin'),
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: const Text('Retour à la connexion'),
                         ),
                       ],
                     ),

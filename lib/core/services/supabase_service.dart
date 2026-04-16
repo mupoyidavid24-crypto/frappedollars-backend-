@@ -50,8 +50,8 @@ class SupabaseService {
       .eq('user_id', userId)
       .order('created_at', ascending: false)
       .limit(1);
-    if (response == null || (response is List && response.isEmpty)) return null;
-    final data = response is List ? response.first : response;
+    if (response.isEmpty) return null;
+    final data = response.first;
     return TradingAccount.fromJson(Map<String, dynamic>.from(data as Map));
   }
 
@@ -68,21 +68,31 @@ class SupabaseService {
       .eq('user_id', userId)
       .order('created_at', ascending: false)
       .limit(1);
-    if (response == null || (response is List && response.isEmpty)) return null;
-    final data = response is List ? response.first : response;
+    if (response.isEmpty) return null;
+    final data = response.first;
     return Subscription.fromJson(Map<String, dynamic>.from(data as Map));
   }
 
   // -- TRADES --
 
   Future<List<Trade>> getCopiedTrades(String accountId) async {
-    final response = await _client
-        .from('copied_trades')
-        .select('*, signals(*)')
-        .eq('client_account_id', accountId)
-        .order('created_at', ascending: false);
-    
-    return (response as List).map((json) => Trade.fromJson(json)).toList();
+    try {
+      final response = await _client
+          .from('copied_trades')
+          .select('*, signals(*)')
+          .eq('client_account_id', accountId)
+          .order('created_at', ascending: false);
+
+      return (response as List).map((json) => Trade.fromJson(json)).toList();
+    } catch (e) {
+      final errorMessage = e.toString().toLowerCase();
+      if (errorMessage.contains('403') ||
+          errorMessage.contains('forbidden') ||
+          errorMessage.contains('permission')) {
+        return [];
+      }
+      rethrow;
+    }
   }
 
   // -- LEADERBOARD --

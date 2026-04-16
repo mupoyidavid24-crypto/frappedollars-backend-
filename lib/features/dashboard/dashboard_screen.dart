@@ -3,11 +3,10 @@ import 'package:provider/provider.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:flutter/services.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../../core/constants/constants.dart';
-import '../../core/services/supabase_service.dart';
 import '../../models/trading_account_model.dart';
 import '../../models/subscription_model.dart';
+import '../../models/trade_model.dart';
 import '../auth/auth_provider.dart';
 import '../subscription/payment_service.dart';
 import 'dashboard_provider.dart';
@@ -24,6 +23,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final _serverController = TextEditingController();
   final _passwordController = TextEditingController();
   final PaymentService _paymentService = PaymentService();
+  bool _dataLoaded = false;
 
   @override
   void dispose() {
@@ -31,6 +31,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _serverController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_dataLoaded) return;
+
+    final authProvider = context.read<AuthProvider>();
+    final userProfile = authProvider.userProfile;
+    if (userProfile != null) {
+      _dataLoaded = true;
+      Future.microtask(() {
+        if (!mounted) return;
+        context.read<DashboardProvider>().loadDashboardData(userProfile.id);
+      });
+    }
   }
 
   void _showConnectMT5Dialog() {
@@ -87,9 +103,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final authProvider = context.watch<AuthProvider>();
-    final supabaseService = SupabaseService();
     final userId = authProvider.userProfile!.id;
     final profile = authProvider.userProfile!;
+    final dashboardProvider = context.watch<DashboardProvider>();
 
     return Scaffold(
       appBar: AppBar(
@@ -101,51 +117,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ],
       ),
-      body: StreamBuilder<List<Map<String, dynamic>>>(
-        stream: supabaseService.getAccountStream(userId),
-        builder: (context, accountSnapshot) {
-          final accountData = accountSnapshot.data?.isNotEmpty == true ? accountSnapshot.data![0] : null;
-          final account = accountData != null ? TradingAccount.fromJson(accountData) : null;
-
-          return StreamBuilder<List<Map<String, dynamic>>>(
-            stream: supabaseService.getSubscriptionStream(userId),
-            builder: (context, subSnapshot) {
-              final subData = subSnapshot.data?.isNotEmpty == true ? subSnapshot.data![0] : null;
-              final sub = subData != null ? Subscription.fromJson(subData) : null;
-
-              return SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _buildBalanceCard(account),
-                    const SizedBox(height: 16),
-                    _buildPerformanceGraph(userId),
-                    const SizedBox(height: 16),
-                    _buildReferralCard(profile.referralCode),
-                    const SizedBox(height: 16),
-                    _buildStatusCard(sub, profile.needsVps),
-                    const SizedBox(height: 24),
-                    if (account == null)
-                      _buildConnectMT5Button()
-                    else ...[
-                      _buildAccountDetails(account, userId),
-                      const SizedBox(height: 24),
-                      StreamBuilder<List<Map<String, dynamic>>>(
-                        stream: supabaseService.getTradesStream(account.id!),
-                        builder: (context, tradesSnapshot) {
-                          final trades = (tradesSnapshot.data ?? []).toList();
-                          return _buildTradesList(trades);
-                        },
-                      ),
-                    ],
-                  ],
-                ),
-              );
-            },
-          );
-        },
+      body: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _buildBalanceCard(dashboardProvider.account),
+            const SizedBox(height: 16),
+            _buildPerformanceGraph(userId),
+            const SizedBox(height: 16),
+            _buildReferralCard(profile.referralCode),
+            const SizedBox(height: 16),
+            _buildStatusCard(dashboardProvider.subscription, profile.needsVps),
+            const SizedBox(height: 24),
+            if (dashboardProvider.account == null)
+              _buildConnectMT5Button()
+            else ...[
+              _buildAccountDetails(dashboardProvider.account!, userId),
+              const SizedBox(height: 24),
+              _buildTradesList(dashboardProvider.trades),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -405,15 +399,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('EA téléchargé sur votre appareil.')),
                   );
-                } else if (url != null && context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Lien de téléchargement généré.')),
-                  );
-                  // Ouvre le lien dans le navigateur
-                  await launchUrl(Uri.parse(url));
                 } else if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Erreur lors de la génération du lien EA.')),
+                    const SnackBar(content: Text('Erreur lors du téléchargement EA.')),
                   );
                 }
               },
@@ -424,7 +412,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildTradesList(List<Map<String, dynamic>> trades) {
+  Widget _buildTradesList(List<Trade> trades) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -450,12 +438,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
               return Card(
                 margin: const EdgeInsets.only(bottom: 8),
                 child: ListTile(
-                  title: Text('Trade #${trade['client_ticket_id'] ?? 'Pending'}'),
-                  subtitle: Text('Volume: ${trade['volume_executed']}'),
+                  title: Text('Trade #${trade.id}'),
+                  subtitle: Text('Symbol: ${trade.symbol} | Volume: ${trade.volume.toStringAsFixed(2)}'),
                   trailing: Text(
-                    trade['execution_status'],
+                    trade.executionStatus,
                     style: TextStyle(
-                      color: trade['execution_status'] == 'SUCCESS' ? Colors.green : Colors.orange,
+                      color: trade.executionStatus == 'SUCCESS' ? Colors.green : Colors.orange,
                     ),
                   ),
                 ),

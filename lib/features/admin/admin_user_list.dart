@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../../core/constants/constants.dart';
+import '../../core/features/admin/admin_auth.dart';
 
 class AdminUserList extends StatefulWidget {
   const AdminUserList({super.key});
@@ -27,7 +28,7 @@ class _AdminUserListState extends State<AdminUserList> {
       _error = null;
     });
     try {
-      final response = await http.get(Uri.parse('${AppConstants.adminBaseUrl}/users'));
+      final response = await http.get(Uri.parse('${AppConstants.adminBaseUrl}/users'), headers: AdminAuth.headers());
       if (response.statusCode == 200) {
         setState(() {
           _users = json.decode(response.body);

@@ -5,11 +5,16 @@ import 'package:provider/provider.dart';
 import 'core/constants/constants.dart';
 import 'features/auth/auth_provider.dart';
 import 'features/auth/login_screen.dart';
+import 'features/admin/admin_entry_screen.dart';
+import 'features/admin/admin_login_screen.dart';
+import 'features/admin/admin_dashboard_screen.dart';
+import 'features/admin/admin_register_screen.dart';
 import 'features/dashboard/dashboard_provider.dart';
 import 'features/dashboard/main_navigation_screen.dart';
 import 'core/services/notification_service.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
+import 'core/features/admin/admin_auth.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -25,6 +30,8 @@ void main() async {
   } catch (e) {
     debugPrint('Supabase Initialization Error: $e');
   }
+
+  await AdminAuth.loadPersistedKey();
 
   // Initialisation notifications (toutes plateformes)
   await NotificationService().init();
@@ -43,6 +50,14 @@ void main() async {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
+  String _initialRoute() {
+    final path = Uri.base.path;
+    if (path.startsWith('/admin')) {
+      return path == '/admin/' ? '/admin' : path;
+    }
+    return '/';
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -59,7 +74,14 @@ class MyApp extends StatelessWidget {
           surface: const Color(AppConstants.backgroundColor),
         ),
       ),
-      home: const AuthWrapper(),
+      initialRoute: _initialRoute(),
+      routes: {
+        '/': (context) => const AuthWrapper(),
+        '/admin': (context) => const AdminEntryScreen(),
+        '/admin/login': (context) => const AdminLoginScreen(),
+        '/admin/register': (context) => const AdminRegisterScreen(),
+        '/admin/dashboard': (context) => const AdminDashboardScreen(),
+      },
     );
   }
 }

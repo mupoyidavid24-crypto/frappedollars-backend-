@@ -126,6 +126,14 @@ class SQLiteStorage:
             FOREIGN KEY (mt5_login) REFERENCES ea_api_keys (mt5_login) ON DELETE CASCADE
         );
 
+        CREATE TABLE IF NOT EXISTS admin_accounts (
+            username TEXT PRIMARY KEY,
+            password_hash TEXT NOT NULL,
+            is_active INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
         CREATE INDEX IF NOT EXISTS idx_trade_dispatches_client_status_created
             ON trade_dispatches(client_login, status, created_at);
         CREATE INDEX IF NOT EXISTS idx_trade_dispatches_signal_status_created
@@ -141,6 +149,41 @@ class SQLiteStorage:
             self._ensure_column(conn, "trade_dispatches", "tag_namespace", "INTEGER NOT NULL DEFAULT 1")
             self._ensure_column(conn, "trade_dispatches", "magic_number", "INTEGER")
             self._ensure_column(conn, "trade_dispatches", "broker_comment", "TEXT")
+
+    def _hash_admin_password(self, password: str) -> str:
+        return hashlib.sha256(password.encode("utf-8")).hexdigest()
+
+    def upsert_admin_account(self, username: str, password: str) -> dict[str, str]:
+        now = utc_now()
+        password_hash = self._hash_admin_password(password)
+        with self._lock, self.connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO admin_accounts (username, password_hash, is_active, created_at, updated_at)
+                VALUES (?, ?, 1, ?, ?)
+                ON CONFLICT(username) DO UPDATE SET
+                    password_hash=excluded.password_hash,
+                    is_active=1,
+                    updated_at=excluded.updated_at
+                """,
+                (username, password_hash, now, now),
+            )
+        return {"username": username, "created_at": now}
+
+    def get_admin_account(self, username: str) -> dict[str, Any] | None:
+        with self.connection() as conn:
+            row = conn.execute(
+                "SELECT username, password_hash, is_active FROM admin_accounts WHERE username = ? LIMIT 1",
+                (username,),
+            ).fetchone()
+        return dict(row) if row is not None else None
+
+    def verify_admin_credentials(self, username: str, password: str) -> bool:
+        record = self.get_admin_account(username)
+        if record is None or not bool(record.get("is_active", 0)):
+            return False
+        expected_hash = record.get("password_hash", "")
+        return hmac.compare_digest(expected_hash, self._hash_admin_password(password))
 
     def _ensure_column(self, conn: sqlite3.Connection, table_name: str, column_name: str, column_def: str) -> None:
         rows = conn.execute(f"PRAGMA table_info({table_name})").fetchall()

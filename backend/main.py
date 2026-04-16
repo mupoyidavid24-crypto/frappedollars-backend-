@@ -84,6 +84,21 @@ class GenerateApiKeyPayload(BaseModel):
     account_role: Literal["MASTER", "CLIENT"]
 
 
+class AdminLoginPayload(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    username: str = Field(min_length=1)
+    password: str = Field(min_length=1)
+
+
+class AdminRegisterPayload(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    username: str = Field(min_length=1)
+    password: str = Field(min_length=1)
+    invite_code: str = Field(min_length=1)
+
+
 def _verify_ea_api_key(mt5_login: str, provided_api_key: str | None, expected_role: str) -> dict[str, Any]:
     if not provided_api_key:
         raise HTTPException(
@@ -128,6 +143,48 @@ def _require_admin_key(x_admin_key: str | None = Header(default=None)) -> str:
             detail="Cle admin invalide.",
         )
     return x_admin_key
+
+
+@app.post("/admin/login")
+def admin_login(payload: AdminLoginPayload) -> dict[str, str]:
+    admin_username = os.getenv("ADMIN_USERNAME", "admin")
+    admin_password = os.getenv("ADMIN_PASSWORD", "MotDePasseComplexe123!")
+    if storage.verify_admin_credentials(payload.username, payload.password):
+        print(f"[ADMIN_LOGIN] success username={payload.username} source=sqlite")
+        return {
+            "status": "ok",
+            "admin_key": ADMIN_API_KEY,
+            "username": payload.username,
+        }
+    if payload.username != admin_username or payload.password != admin_password:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Identifiants admin invalides.",
+        )
+    print(f"[ADMIN_LOGIN] success username={payload.username}")
+    return {
+        "status": "ok",
+        "admin_key": ADMIN_API_KEY,
+        "username": payload.username,
+    }
+
+
+@app.post("/admin/register")
+def admin_register(payload: AdminRegisterPayload) -> dict[str, str]:
+    invite_code = os.getenv("ADMIN_INVITE_CODE", "CreateAdmin2026")
+    if payload.invite_code != invite_code:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Code d'invitation invalide.",
+        )
+
+    storage.upsert_admin_account(payload.username, payload.password)
+    print(f"[ADMIN_REGISTER] success username={payload.username}")
+    return {
+        "status": "ok",
+        "admin_key": ADMIN_API_KEY,
+        "username": payload.username,
+    }
 
 
 @app.get("/")

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../../constants/constants.dart';
+import 'admin_auth.dart';
 
 class NotificationAdminService {
   static String get baseUrl => AppConstants.adminBaseUrl;
@@ -10,7 +11,7 @@ class NotificationAdminService {
       final response = await http.post(
         Uri.parse('$baseUrl/notifications/send'),
         body: json.encode(data),
-        headers: {'Content-Type': 'application/json'},
+        headers: AdminAuth.headers(jsonContent: true),
       );
       if (response.statusCode == 200) return true;
       final msg = _extractError(response);
@@ -22,7 +23,7 @@ class NotificationAdminService {
 
   static Future<List<Map<String, dynamic>>> fetchNotifications() async {
     try {
-      final response = await http.get(Uri.parse('$baseUrl/notifications'));
+      final response = await http.get(Uri.parse('$baseUrl/notifications'), headers: AdminAuth.headers());
       if (response.statusCode == 200) {
         return List<Map<String, dynamic>>.from(json.decode(response.body));
       } else {
