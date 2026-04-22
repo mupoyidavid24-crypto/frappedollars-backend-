@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../../core/services/supabase_service.dart';
 import '../../models/trading_account_model.dart';
@@ -9,6 +11,8 @@ import 'package:flutter/services.dart' show rootBundle;
 
 class DashboardProvider extends ChangeNotifier {
   final SupabaseService _supabaseService = SupabaseService();
+  Timer? _liveRefreshTimer;
+  String? _activeUserId;
   
   TradingAccount? _account;
   Subscription? _subscription;
@@ -19,6 +23,50 @@ class DashboardProvider extends ChangeNotifier {
   Subscription? get subscription => _subscription;
   List<Trade> get trades => _trades;
   bool get isLoading => _isLoading;
+
+  Future<void> startLiveSync(String userId) async {
+    if (_activeUserId == userId && _liveRefreshTimer != null) {
+      return;
+    }
+
+    _activeUserId = userId;
+    _liveRefreshTimer?.cancel();
+    _liveRefreshTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      refreshDashboardData();
+    });
+
+    await loadDashboardData(userId);
+  }
+
+  Future<void> refreshDashboardData() async {
+    final userId = _activeUserId;
+    if (userId == null) {
+      return;
+    }
+
+    try {
+      final account = await _supabaseService.getTradingAccount(userId);
+      final subscription = await _supabaseService.getSubscription(userId);
+      List<Trade> trades = <Trade>[];
+
+      if (account != null && account.id != null) {
+        trades = await _supabaseService.getCopiedTrades(account.id!);
+      }
+
+      _account = account;
+      _subscription = subscription;
+      _trades = trades;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error refreshing dashboard data: $e');
+    }
+  }
+
+  void stopLiveSync() {
+    _liveRefreshTimer?.cancel();
+    _liveRefreshTimer = null;
+    _activeUserId = null;
+  }
 
   Future<void> loadDashboardData(String userId) async {
     _isLoading = true;
@@ -94,5 +142,11 @@ class DashboardProvider extends ChangeNotifier {
     }
 
     return null;
+  }
+
+  @override
+  void dispose() {
+    _liveRefreshTimer?.cancel();
+    super.dispose();
   }
 }

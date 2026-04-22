@@ -43,13 +43,6 @@ int OnInit()
       return(INIT_FAILED);
    }
 
-   // Sécurité stricte : doit être lancé sur le compte maître 6048965
-   if(login != "6048965") {
-      Alert("ERREUR: Ce compte n'est pas autorisé à exécuter l'EA maître. Login attendu: 6048965, login courant: " + login);
-      ExpertRemove();
-      return(INIT_FAILED);
-   }
-
    // Vérification WebRequest activé (74 = TERMINAL_WEBREQUEST)
    if(!TerminalInfoInteger(74))
    {

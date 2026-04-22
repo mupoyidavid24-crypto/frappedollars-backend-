@@ -48,7 +48,7 @@ class SupabaseService {
       .from('trading_accounts')
       .select()
       .eq('user_id', userId)
-      .order('created_at', ascending: false)
+      .order('last_sync', ascending: false)
       .limit(1);
     if (response.isEmpty) return null;
     final data = response.first;

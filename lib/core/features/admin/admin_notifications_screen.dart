@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import '../../constants/constants.dart';
 import 'notification_admin_service.dart';
 
 class AdminNotificationsScreen extends StatefulWidget {
@@ -11,6 +14,7 @@ class AdminNotificationsScreen extends StatefulWidget {
 class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
   List<Map<String, dynamic>> notifications = [];
   bool loading = false;
+  Timer? _refreshTimer;
 
   void sendNotification({String? userId, String? title, String? message, String? priority}) async {
     setState(() { loading = true; });
@@ -50,14 +54,27 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
   void initState() {
     super.initState();
     fetchNotifications();
+    _refreshTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (mounted) {
+        fetchNotifications();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Notifications Admin')),
-      floatingActionButton: FloatingActionButton(
-        child: const Icon(Icons.send),
+      backgroundColor: const Color(0xFF0A0F14),
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: const Color(AppConstants.primaryColor),
+        icon: const Icon(Icons.send, color: Colors.white),
+        label: const Text('Envoyer', style: TextStyle(color: Colors.white)),
         onPressed: () {
           String userId = '';
           String title = '';
@@ -67,26 +84,32 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
             context: context,
             builder: (context) {
               return AlertDialog(
-                title: const Text('Envoyer une notification'),
+                backgroundColor: const Color(0xFF101821),
+                title: const Text('Envoyer une notification', style: TextStyle(color: Colors.white)),
                 content: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     TextField(
+                      style: const TextStyle(color: Colors.white),
                       decoration: const InputDecoration(labelText: 'ID utilisateur'),
                       onChanged: (v) => userId = v,
                     ),
                     TextField(
+                      style: const TextStyle(color: Colors.white),
                       decoration: const InputDecoration(labelText: 'Titre'),
                       onChanged: (v) => title = v,
                     ),
                     TextField(
+                      style: const TextStyle(color: Colors.white),
                       decoration: const InputDecoration(labelText: 'Message'),
                       onChanged: (v) => message = v,
                     ),
+                    const SizedBox(height: 12),
                     DropdownButton<String>(
+                      dropdownColor: const Color(0xFF101821),
                       value: priority,
                       items: ['NORMAL', 'URGENT', 'EA']
-                          .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                          .map((e) => DropdownMenuItem(value: e, child: Text(e, style: const TextStyle(color: Colors.white))))
                           .toList(),
                       onChanged: (v) {
                         setState(() { priority = v!; });
@@ -106,29 +129,55 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
           );
         },
       ),
-      body: loading
-          ? const Center(child: CircularProgressIndicator())
-          : notifications.isEmpty
-              ? const Center(child: Text('Aucune notification'))
-              : ListView.builder(
-                  itemCount: notifications.length,
-                  itemBuilder: (context, index) {
-                    final n = notifications[index];
-                    return Card(
-                      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-                      child: ListTile(
-                        leading: const Icon(Icons.notifications_active),
-                        title: Text(n['title'] ?? ''),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Message: ${n['message']}'),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(colors: [Color(0xFF071116), Color(0xFF0C161B), Color(0xFF05080B)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Notifications Admin', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 4),
+                const Text('Envoi push, historique et ciblage utilisateur', style: TextStyle(color: Colors.white54)),
+                const SizedBox(height: 16),
+                Expanded(
+                  child: loading
+                      ? const Center(child: CircularProgressIndicator(color: Color(AppConstants.primaryColor)))
+                      : notifications.isEmpty
+                          ? const Center(child: Text('Aucune notification', style: TextStyle(color: Colors.white60)))
+                          : ListView.separated(
+                              itemCount: notifications.length,
+                              separatorBuilder: (_, __) => const SizedBox(height: 12),
+                              itemBuilder: (context, index) {
+                                final n = notifications[index];
+                                return Container(
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(20),
+                                    color: Colors.white.withOpacity(0.04),
+                                    border: Border.all(color: Colors.white.withOpacity(0.06)),
+                                  ),
+                                  child: ListTile(
+                                    contentPadding: EdgeInsets.zero,
+                                    leading: const CircleAvatar(
+                                      backgroundColor: Color(AppConstants.primaryColor),
+                                      child: Icon(Icons.notifications_active, color: Colors.white),
+                                    ),
+                                    title: Text(n['title'] ?? '', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                                    subtitle: Text('Message: ${n['message']}', style: const TextStyle(color: Colors.white70)),
+                                  ),
+                                );
+                              },
+                            ),
                 ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

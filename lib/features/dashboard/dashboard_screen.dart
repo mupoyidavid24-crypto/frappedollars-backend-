@@ -25,8 +25,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final PaymentService _paymentService = PaymentService();
   bool _dataLoaded = false;
 
+  bool get _isSubscriptionPaymentWindowOpen {
+    final currentDay = DateTime.now().weekday;
+    return currentDay == DateTime.saturday || currentDay == DateTime.sunday;
+  }
+
   @override
   void dispose() {
+    context.read<DashboardProvider>().stopLiveSync();
     _loginController.dispose();
     _serverController.dispose();
     _passwordController.dispose();
@@ -44,7 +50,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _dataLoaded = true;
       Future.microtask(() {
         if (!mounted) return;
-        context.read<DashboardProvider>().loadDashboardData(userProfile.id);
+        context.read<DashboardProvider>().startLiveSync(userProfile.id);
       });
     }
   }
@@ -316,34 +322,46 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Padding(
                 padding: const EdgeInsets.only(top: 8.0),
                 child: ElevatedButton(
-                  onPressed: () => _paymentService.handlePayment(
-                    context: context,
-                    amount: 50.0,
-                    type: "COPY_TRADING_WEEKLY",
-                  ),
+                  onPressed: _isSubscriptionPaymentWindowOpen
+                      ? () => _paymentService.handlePayment(
+                            context: context,
+                            amount: 50.0,
+                            type: "COPY_TRADING_WEEKLY",
+                          )
+                      : null,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(AppConstants.primaryColor),
                     foregroundColor: Colors.white,
                     minimumSize: const Size(double.infinity, 45),
                   ),
-                  child: const Text('PAYER L\'ABONNEMENT TRADING (50\$)'),
+                  child: Text(
+                    _isSubscriptionPaymentWindowOpen
+                        ? 'PAYER L\'ABONNEMENT TRADING (50\$)'
+                        : 'Paiement disponible samedi et dimanche',
+                  ),
                 ),
               ),
             if (needsVps && !isActive)
                Padding(
                 padding: const EdgeInsets.only(top: 8.0),
                 child: ElevatedButton(
-                  onPressed: () => _paymentService.handlePayment(
-                    context: context,
-                    amount: 35.0,
-                    type: "VPS_MONTHLY",
-                  ),
+                  onPressed: _isSubscriptionPaymentWindowOpen
+                      ? () => _paymentService.handlePayment(
+                            context: context,
+                            amount: 35.0,
+                            type: "VPS_MONTHLY",
+                          )
+                      : null,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.blueAccent,
                     foregroundColor: Colors.white,
                     minimumSize: const Size(double.infinity, 45),
                   ),
-                  child: const Text('PAYER L\'HÉBERGEMENT VPS (35\$)'),
+                  child: Text(
+                    _isSubscriptionPaymentWindowOpen
+                        ? 'PAYER L\'HÉBERGEMENT VPS (35\$)'
+                        : 'Paiement disponible samedi et dimanche',
+                  ),
                 ),
               ),
           ],

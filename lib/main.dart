@@ -7,8 +7,14 @@ import 'features/auth/auth_provider.dart';
 import 'features/auth/login_screen.dart';
 import 'features/admin/admin_entry_screen.dart';
 import 'features/admin/admin_login_screen.dart';
-import 'features/admin/admin_dashboard_screen.dart';
 import 'features/admin/admin_register_screen.dart';
+import 'core/features/admin/admin_api_keys_screen.dart';
+import 'core/features/admin/admin_dashboard_screen.dart' as modern_admin;
+import 'core/features/admin/admin_copytrading_screen.dart';
+import 'core/features/admin/admin_logs_screen.dart';
+import 'core/features/admin/admin_notifications_screen.dart';
+import 'core/features/admin/admin_payments_screen.dart';
+import 'core/features/admin/admin_vip_screen.dart';
 import 'features/dashboard/dashboard_provider.dart';
 import 'features/dashboard/main_navigation_screen.dart';
 import 'core/services/notification_service.dart';
@@ -80,7 +86,14 @@ class MyApp extends StatelessWidget {
         '/admin': (context) => const AdminEntryScreen(),
         '/admin/login': (context) => const AdminLoginScreen(),
         '/admin/register': (context) => const AdminRegisterScreen(),
-        '/admin/dashboard': (context) => const AdminDashboardScreen(),
+        '/admin/dashboard': (context) =>
+            const modern_admin.AdminDashboardScreen(),
+        '/admin/api-keys': (context) => const AdminApiKeysScreen(),
+        '/admin/payments': (context) => const AdminPaymentsScreen(),
+        '/admin/notifications': (context) => const AdminNotificationsScreen(),
+        '/admin/vip': (context) => const AdminVIPScreen(),
+        '/admin/copytrading': (context) => const AdminCopyTradingScreen(),
+        '/admin/logs': (context) => const AdminLogsScreen(),
       },
     );
   }

@@ -27,7 +27,7 @@ class AdminPaymentsDashboard extends StatelessWidget {
                         children: [
                           Text('Montant: 100 USD'),
                           Text('Moyen: Airtel Money'),
-                          Text('Numéro: 0977338230'),
+                          Text('Numéro: +243977338230'),
                           Text('Date: 2026-03-07'),
                           Text('Statut: En attente'),
                           Text('Preuve: voir capture'),

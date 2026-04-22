@@ -1,15 +1,21 @@
 from __future__ import annotations
 
+import json
 import hmac
 import os
+from datetime import datetime, timedelta, timezone
 from typing import Any, Literal
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field
 
+from backend.admin import router as admin_router
 from backend.ea_generator import router as ea_router
+from backend.config import supabase
 from backend.storage import SQLiteStorage, hash_api_key, utc_now
 
 
@@ -27,6 +33,7 @@ DISPATCHABLE_STATUSES = ("PENDING", "RETRY")
 storage = SQLiteStorage(SQLITE_DB_PATH)
 app = FastAPI(title="FrappedDollars Backend", version="2.1.0")
 app.include_router(ea_router)
+app.include_router(admin_router)
 
 allowed_origins = [
     origin.strip()
@@ -99,6 +106,16 @@ class AdminRegisterPayload(BaseModel):
     invite_code: str = Field(min_length=1)
 
 
+class PaymentVerifyPayload(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    user_id: str = Field(min_length=1)
+    transaction_id: str = Field(min_length=1)
+    payment_type: Literal["COPY_TRADING_WEEKLY", "VPS_MONTHLY"]
+    amount: float = Field(gt=0)
+    currency: str = Field(default="USD")
+
+
 def _verify_ea_api_key(mt5_login: str, provided_api_key: str | None, expected_role: str) -> dict[str, Any]:
     if not provided_api_key:
         raise HTTPException(
@@ -143,6 +160,73 @@ def _require_admin_key(x_admin_key: str | None = Header(default=None)) -> str:
             detail="Cle admin invalide.",
         )
     return x_admin_key
+
+
+def _flutterwave_verify_transaction(transaction_id: str) -> dict[str, Any]:
+    secret_key = os.getenv("FLUTTERWAVE_SECRET_KEY")
+    base_url = os.getenv("FLUTTERWAVE_BASE_URL", "https://api.flutterwave.com/v3")
+    if not secret_key:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="FLUTTERWAVE_SECRET_KEY n'est pas configuree sur le backend.",
+        )
+
+    request = Request(
+        f"{base_url.rstrip('/')}/transactions/{transaction_id}/verify",
+        headers={"Authorization": f"Bearer {secret_key}"},
+        method="GET",
+    )
+
+    try:
+        with urlopen(request, timeout=30) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace") if exc.fp else str(exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Flutterwave verification failed: {body}",
+        ) from exc
+    except URLError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Flutterwave verification unreachable: {exc.reason}",
+        ) from exc
+
+    if payload.get("status") != "success":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Transaction Flutterwave invalide ou non verifiee.",
+        )
+
+    data = payload.get("data") or {}
+    if data.get("status") not in {"successful", "success"}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Transaction Flutterwave non reussie.",
+        )
+    return data
+
+
+def _subscription_payment_window_open() -> bool:
+    current_day = datetime.now(timezone.utc).weekday()
+    return current_day in (5, 6)
+
+
+def _activate_subscription_from_payment(user_id: str, payment_type: str, transaction_id: str) -> dict[str, Any]:
+    now = datetime.now(timezone.utc)
+    end_date = now + (timedelta(days=7) if payment_type == "COPY_TRADING_WEEKLY" else timedelta(days=30))
+    result = supabase.table("subscriptions").insert(
+        {
+            "user_id": user_id,
+            "type": payment_type,
+            "status": "ACTIVE",
+            "start_date": now.isoformat(),
+            "end_date": end_date.isoformat(),
+            "transaction_ref": transaction_id,
+            "auto_renew": True,
+        }
+    ).execute()
+    return result.data
 
 
 @app.post("/admin/login")
@@ -331,6 +415,61 @@ def generate_api_key(
     result = storage.issue_api_key(payload.mt5_login, payload.account_role)
     print(f"[API_KEY] issued mt5_login={payload.mt5_login} role={payload.account_role}")
     return result
+
+
+@app.post("/payments/verify")
+def verify_payment(payload: PaymentVerifyPayload) -> dict[str, Any]:
+    if not _subscription_payment_window_open():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Les depots d'abonnement sont autorises uniquement le samedi et le dimanche.",
+        )
+
+    profile_response = (
+        supabase.table("profiles").select("id, email").eq("id", payload.user_id).maybe_single().execute()
+    )
+    profile = profile_response.data
+    if not profile:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Utilisateur introuvable.")
+
+    transaction = _flutterwave_verify_transaction(payload.transaction_id)
+    currency = str(transaction.get("currency") or "").upper()
+    transaction_amount = float(transaction.get("amount") or transaction.get("charged_amount") or 0)
+    customer = transaction.get("customer") or {}
+    customer_email = str(customer.get("email") or "").lower()
+    profile_email = str(profile.get("email") or "").lower()
+
+    if payload.currency.upper() != currency:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Devise Flutterwave inattendue.",
+        )
+    if abs(transaction_amount - payload.amount) > 0.01:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Montant Flutterwave inattendu.",
+        )
+    if customer_email and profile_email and customer_email != profile_email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Le client Flutterwave ne correspond pas au compte utilisateur.",
+        )
+
+    subscription_rows = _activate_subscription_from_payment(
+        user_id=payload.user_id,
+        payment_type=payload.payment_type,
+        transaction_id=payload.transaction_id,
+    )
+
+    print(
+        f"[PAYMENT_VERIFY] success user_id={payload.user_id} transaction_id={payload.transaction_id} type={payload.payment_type}"
+    )
+    return {
+        "status": "ok",
+        "transaction_id": payload.transaction_id,
+        "verified_transaction": transaction,
+        "subscription": subscription_rows[0] if subscription_rows else None,
+    }
 
 
 @app.get("/admin/trade_dispatches")

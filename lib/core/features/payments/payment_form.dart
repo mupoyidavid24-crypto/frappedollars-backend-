@@ -4,30 +4,23 @@ class PaymentForm extends StatefulWidget {
   const PaymentForm({super.key});
 
   @override
-  _PaymentFormState createState() => _PaymentFormState();
+  State<PaymentForm> createState() => _PaymentFormState();
 }
 
 class _PaymentFormState extends State<PaymentForm> {
+  static const String _paymentMethodName = 'Airtel Money';
+  static const String _paymentNumber = '+243977338230';
+
   final _amountController = TextEditingController();
   final _phoneController = TextEditingController();
-  String? _selectedMethod;
-  List<String> _paymentMethods = [];
-    @override
-    void initState() {
-      super.initState();
-      _fetchPaymentMethods();
-    }
-
-    Future<void> _fetchPaymentMethods() async {
-      final client = Supabase.instance.client;
-      final response = await client.from('payment_methods').select('name');
-      setState(() {
-        _paymentMethods = List<String>.from(response.map((e) => e['name']));
-        if (_paymentMethods.isNotEmpty) _selectedMethod = _paymentMethods.first;
-      });
-    }
-  String? _proofUrl;
   final String _status = 'En attente de validation';
+
+  @override
+  void dispose() {
+    _amountController.dispose();
+    _phoneController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -49,47 +42,31 @@ class _PaymentFormState extends State<PaymentForm> {
               decoration: const InputDecoration(labelText: 'Numéro de téléphone'),
             ),
             const SizedBox(height: 16),
-            _paymentMethods.isEmpty
-                ? const CircularProgressIndicator()
-                : DropdownButton<String>(
-                    value: _selectedMethod,
-                    items: _paymentMethods
-                        .map((m) => DropdownMenuItem(value: m, child: Text(m)))
-                        .toList(),
-                    onChanged: (val) {
-                      setState(() => _selectedMethod = val!);
-                    },
-                  ),
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.payments_outlined),
+                title: const Text('Moyen de paiement'),
+                subtitle: Text('$_paymentMethodName - $_paymentNumber'),
+              ),
+            ),
             const SizedBox(height: 16),
             Text(
-              'Instructions : Envoyez ${_amountController.text.isEmpty ? 'X' : _amountController.text} USD à ${_selectedMethod == 'Airtel Money' ? '0977338230' : '0851125664'}',
+              'Instructions : Envoyez ${_amountController.text.isEmpty ? 'X' : _amountController.text} USD à $_paymentNumber via $_paymentMethodName.',
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
             ElevatedButton(
               onPressed: () async {
-                // TODO: upload proof logic
-                // Simule un fichier (remplace par la vraie logique de sélection de fichier)
-                File? proofFile;
-                // TODO: Ajoute la logique pour sélectionner le fichier
-                // Appelle le service d'upload avec le moyen de paiement
-                final userId = 'user_id'; // Remplace par la vraie logique utilisateur
-                if (proofFile != null) {
-                  final url = await PaymentUploadService().uploadProof(proofFile, userId, _selectedMethod);
-                  setState(() => _proofUrl = url);
-                }
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Paiement Airtel sélectionné. Joins la preuve via le flux de validation.'),
+                  ),
+                );
               },
-              child: Text(_proofUrl == null ? 'Uploader une preuve' : 'Preuve uploadée'),
+              child: const Text('Continuer'),
             ),
             const SizedBox(height: 16),
             Text('Statut : $_status'),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () {
-                // TODO: submit payment logic
-              },
-              child: const Text('Soumettre paiement'),
-            ),
           ],
         ),
       ),

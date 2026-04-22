@@ -4,7 +4,4 @@
 _flutter.loader.load({
   config: {
   },
-  serviceWorkerSettings: {
-    serviceWorkerVersion: {{flutter_service_worker_version}},
-  },
 });
