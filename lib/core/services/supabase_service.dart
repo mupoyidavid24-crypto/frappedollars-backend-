@@ -19,7 +19,8 @@ class SupabaseService {
   }
 
   Future<AuthResponse> signIn(String email, String password) async {
-    return await _client.auth.signInWithPassword(email: email, password: password);
+    return await _client.auth
+        .signInWithPassword(email: email, password: password);
   }
 
   Future<void> signOut() async {
@@ -31,12 +32,9 @@ class SupabaseService {
   // -- PROFILE --
 
   Future<Profile?> getUserProfile(String userId) async {
-    final response = await _client
-        .from('profiles')
-        .select()
-        .eq('id', userId)
-        .maybeSingle();
-    
+    final response =
+        await _client.from('profiles').select().eq('id', userId).maybeSingle();
+
     if (response == null) return null;
     return Profile.fromJson(response);
   }
@@ -45,11 +43,11 @@ class SupabaseService {
 
   Future<TradingAccount?> getTradingAccount(String userId) async {
     final response = await _client
-      .from('trading_accounts')
-      .select()
-      .eq('user_id', userId)
-      .order('last_sync', ascending: false)
-      .limit(1);
+        .from('trading_accounts')
+        .select()
+        .eq('user_id', userId)
+        .order('last_sync', ascending: false)
+        .limit(1);
     if (response.isEmpty) return null;
     final data = response.first;
     return TradingAccount.fromJson(Map<String, dynamic>.from(data as Map));
@@ -63,11 +61,11 @@ class SupabaseService {
 
   Future<Subscription?> getSubscription(String userId) async {
     final response = await _client
-      .from('subscriptions')
-      .select()
-      .eq('user_id', userId)
-      .order('created_at', ascending: false)
-      .limit(1);
+        .from('subscriptions')
+        .select()
+        .eq('user_id', userId)
+        .order('created_at', ascending: false)
+        .limit(1);
     if (response.isEmpty) return null;
     final data = response.first;
     return Subscription.fromJson(Map<String, dynamic>.from(data as Map));
@@ -79,7 +77,8 @@ class SupabaseService {
     try {
       final response = await _client
           .from('copied_trades')
-          .select('*, signals(*)')
+          .select(
+              'id, signal_id, client_account_id, client_ticket_id, volume_executed, execution_status, profit, error_message, created_at, closed_at')
           .eq('client_account_id', accountId)
           .order('created_at', ascending: false);
 

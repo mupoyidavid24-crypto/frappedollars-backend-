@@ -24,19 +24,29 @@ class Trade {
   });
 
   factory Trade.fromJson(Map<String, dynamic> json) {
-    // Note: This assumes a join between copied_trades and signals
     final signal = json['signals'];
+    final signalMap = signal is Map
+        ? Map<String, dynamic>.from(signal as Map)
+        : <String, dynamic>{};
+    final fallbackSymbol = json['symbol']?.toString() ??
+        json['signal_id']?.toString() ??
+        'UNKNOWN';
+    final fallbackTradeType = json['trade_type']?.toString() ?? 'UNKNOWN';
+    final fallbackStatus = json['status']?.toString() ?? 'OPEN';
     return Trade(
       id: json['id'],
-      symbol: signal['symbol'],
-      tradeType: signal['trade_type'],
+      symbol: signalMap['symbol']?.toString() ?? fallbackSymbol,
+      tradeType: signalMap['trade_type']?.toString() ?? fallbackTradeType,
       volume: (json['volume_executed'] ?? 0.0).toDouble(),
-      openPrice: (signal['open_price'] ?? 0.0).toDouble(),
-      tp: (signal['tp'] ?? 0.0).toDouble(),
-      sl: (signal['sl'] ?? 0.0).toDouble(),
-      status: signal['status'],
-      executionStatus: json['execution_status'],
-      createdAt: DateTime.parse(json['created_at']),
+      openPrice: signalMap['open_price'] != null
+          ? (signalMap['open_price'] as num).toDouble()
+          : null,
+      tp: signalMap['tp'] != null ? (signalMap['tp'] as num).toDouble() : null,
+      sl: signalMap['sl'] != null ? (signalMap['sl'] as num).toDouble() : null,
+      status: signalMap['status']?.toString() ?? fallbackStatus,
+      executionStatus: json['execution_status']?.toString() ?? 'PENDING',
+      createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ??
+          DateTime.now(),
     );
   }
 }

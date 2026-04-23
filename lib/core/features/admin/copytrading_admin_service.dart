@@ -12,9 +12,13 @@ class CopyTradingAdminService {
   }
 
   static Future<List<Map<String, dynamic>>> fetchHistory() async {
-    final response = await http.get(Uri.parse('$baseUrl/copytrading/history'), headers: AdminAuth.headers());
+    final response = await http.get(Uri.parse('$baseUrl/trade_dispatches'), headers: AdminAuth.headers());
     if (response.statusCode == 200) {
-      return List<Map<String, dynamic>>.from(json.decode(response.body));
+      final decoded = json.decode(response.body);
+      if (decoded is Map && decoded['items'] is List) {
+        return List<Map<String, dynamic>>.from(decoded['items'] as List);
+      }
+      return List<Map<String, dynamic>>.from(decoded as List);
     } else {
       throw Exception('Erreur chargement historique');
     }

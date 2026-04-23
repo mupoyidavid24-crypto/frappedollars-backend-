@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS profiles (
 CREATE TABLE IF NOT EXISTS trading_accounts (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+    master_account_id UUID REFERENCES trading_accounts(id),
     mt5_login TEXT NOT NULL,
     mt5_password_encrypted TEXT,
     mt5_server TEXT NOT NULL,
@@ -298,9 +299,10 @@ USING (
     EXISTS (
         SELECT 1
         FROM copied_trades ct
-        JOIN trading_accounts ta ON ta.id = ct.client_account_id
+        JOIN trading_accounts client_acc ON client_acc.id = ct.client_account_id
         WHERE ct.signal_id = signals.id
-            AND ta.user_id = auth.uid()
+            AND client_acc.user_id = auth.uid()
+            AND client_acc.master_account_id = signals.master_account_id
     )
 );
 

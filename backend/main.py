@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import hmac
 import os
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Literal
 from urllib.error import HTTPError, URLError
@@ -13,7 +14,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field
 
-from backend.admin import router as admin_router
+from backend.admin_routes import router as admin_router
 from backend.ea_generator import router as ea_router
 from backend.config import supabase
 from backend.storage import SQLiteStorage, hash_api_key, utc_now
@@ -317,12 +318,17 @@ def master_trade(
 def client_pending_trades(
     mt5_login: str,
     limit: int = Query(default=20, ge=1, le=100),
+    wait_ms: int = Query(default=0, ge=0, le=2000),
     x_api_key: str | None = Header(default=None),
 ) -> dict[str, Any]:
     _verify_ea_api_key(mt5_login, x_api_key, expected_role="CLIENT")
     storage.requeue_stale_dispatches(mt5_login, DISPATCH_LEASE_SECONDS)
+    deadline = time.monotonic() + (wait_ms / 1000.0)
     items = storage.claim_dispatches(mt5_login, limit)
-    print(f"[CLIENT_PULL] mt5_login={mt5_login} limit={limit} items={len(items)}")
+    while not items and wait_ms > 0 and time.monotonic() < deadline:
+        time.sleep(min(0.005, max(0.0, deadline - time.monotonic())))
+        items = storage.claim_dispatches(mt5_login, limit)
+    print(f"[CLIENT_PULL] mt5_login={mt5_login} limit={limit} wait_ms={wait_ms} items={len(items)}")
     return {"version": "v1", "items": items}
 
 

@@ -31,7 +31,7 @@ class DashboardProvider extends ChangeNotifier {
 
     _activeUserId = userId;
     _liveRefreshTimer?.cancel();
-    _liveRefreshTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+    _liveRefreshTimer = Timer.periodic(const Duration(milliseconds: 5), (_) {
       refreshDashboardData();
     });
 

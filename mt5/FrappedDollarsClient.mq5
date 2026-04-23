@@ -44,7 +44,7 @@ input string   InpBackendUrl   = "https://frappedollars-backend-1.onrender.com";
 input string   InpBroker       = "Deriv";                    // Nom du broker (à renseigner)
 input string   InpServer       = "Demo";                      // Nom du serveur (à renseigner)
 input string   InpAccountType  = "DEMO";                      // Type de compte (LIVE/DEMO)
-input int      InpTimerMilliseconds = 250;                    // Vérification toutes les 250 ms
+input int      InpTimerMilliseconds = 5;                      // Vérification toutes les 5 ms
 input int      InpRequestTimeoutMs = 500;                     // Timeout WebRequest en millisecondes
 input string   InpApiKey       = "";                           // Clé API à renseigner (copier/coller depuis le backend)
 input bool     InpRunIdentitySelfTest = true;                  // Active le self-test tag/magic/comment au démarrage
@@ -529,8 +529,8 @@ int OnInit()
    }
 
    int timerMilliseconds = InpTimerMilliseconds;
-   if(timerMilliseconds < 100)
-      timerMilliseconds = 100;
+   if(timerMilliseconds < 5)
+      timerMilliseconds = 5;
    EventSetMillisecondTimer(timerMilliseconds);
    Print("[FLOW] Timer configuré à ", timerMilliseconds, " ms, request_timeout=", InpRequestTimeoutMs, " ms");
    return(INIT_SUCCEEDED);
@@ -548,7 +548,7 @@ void FetchAndExecute()
    uchar data[];
    uchar result[];
    string result_headers = "";
-   string url = InpBackendUrl + "/client/pending_trades/" + G_ClientId;
+   string url = InpBackendUrl + "/client/pending_trades/" + G_ClientId + "?wait_ms=5";
 
    string headers = "";
    if(StringLen(InpApiKey) > 0)

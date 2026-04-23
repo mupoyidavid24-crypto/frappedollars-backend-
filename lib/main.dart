@@ -5,7 +5,6 @@ import 'package:provider/provider.dart';
 import 'core/constants/constants.dart';
 import 'features/auth/auth_provider.dart';
 import 'features/auth/login_screen.dart';
-import 'features/admin/admin_entry_screen.dart';
 import 'features/admin/admin_login_screen.dart';
 import 'features/admin/admin_register_screen.dart';
 import 'core/features/admin/admin_api_keys_screen.dart';
@@ -83,7 +82,7 @@ class MyApp extends StatelessWidget {
       initialRoute: _initialRoute(),
       routes: {
         '/': (context) => const AuthWrapper(),
-        '/admin': (context) => const AdminEntryScreen(),
+        '/admin': (context) => const modern_admin.AdminDashboardScreen(),
         '/admin/login': (context) => const AdminLoginScreen(),
         '/admin/register': (context) => const AdminRegisterScreen(),
         '/admin/dashboard': (context) =>

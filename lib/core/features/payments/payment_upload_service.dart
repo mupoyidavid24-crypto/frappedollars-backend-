@@ -7,24 +7,18 @@ class PaymentUploadService {
   Future<String?> uploadProof(File file, String userId, String paymentMethod) async {
     final fileName = 'proof_${userId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
     final storagePath = 'payments/$fileName';
-    final response = await supabase.storage.from('proofs').upload(storagePath, file);
+    final uploadedPath = await supabase.storage.from('proofs').upload(storagePath, file);
 
-    // Enregistre le moyen de paiement dans Supabase (table payments)
-    if (response is String || (response is Map && !response.containsKey('error'))) {
-      final publicUrl = supabase.storage.from('proofs').getPublicUrl(storagePath);
+    if (uploadedPath.isNotEmpty) {
+      final publicUrl = supabase.storage.from('proofs').getPublicUrl(uploadedPath);
       await supabase.from('payments').insert({
         'user_id': userId,
-        'proof_url': publicUrl.url ?? publicUrl.toString(),
+        'proof_url': publicUrl,
         'payment_method': paymentMethod,
         'created_at': DateTime.now().toIso8601String(),
       });
-      return publicUrl.url ?? publicUrl.toString();
+      return publicUrl;
     }
-    // Si la réponse est une Map contenant une clé 'error', c'est un échec
-    if (response is Map && response.containsKey('error')) {
-      return null;
-    }
-    // Sinon, retourne null
     return null;
   }
 }

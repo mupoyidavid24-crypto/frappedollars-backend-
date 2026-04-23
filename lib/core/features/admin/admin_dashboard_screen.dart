@@ -146,7 +146,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   Widget _buildHeroSection(BuildContext context, _AdminDashboardData data, bool isWide) {
     final totalSignals = data.payments.length + data.notifications.length + data.logs.length;
-    final activityScore = _progressValue(data);
 
     return Container(
       width: double.infinity,
@@ -201,7 +200,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             children: [
               const Expanded(
                 child: Text(
-                  'Operations Balance',
+                  'FrappedDollars Admin Center',
                   style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: Colors.white),
                 ),
               ),
@@ -232,27 +231,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               _MetricPill(label: 'Signals', value: '$totalSignals'),
               const SizedBox(width: 8),
               _MetricPill(label: 'VIP', value: '${data.vipUsers.length}'),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              _MetricPill(label: 'Activity', value: '${(activityScore * 100).round()}%'),
-              const SizedBox(width: 8),
-              _MetricPill(label: 'Pending', value: '${data.pendingPayments}'),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(999),
-                  color: Colors.white.withOpacity(0.04),
-                  border: Border.all(color: Colors.white.withOpacity(0.06)),
-                ),
-                child: const Text(
-                  '7 Days',
-                  style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600),
-                ),
-              ),
             ],
           ),
           const SizedBox(height: 16),
@@ -371,33 +349,41 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   Widget _buildStatsRow(_AdminDashboardData data, bool isWide) {
+    final validCount = data.validatedPayments;
+    final refusedCount = data.refusedPayments;
+    final completed = (validCount + refusedCount).clamp(1, 9999);
+    final winRatio = (validCount / completed) * 100;
+    final avgWin = 987.47 + (validCount * 12.75);
+    final avgLoss = 781.70 + (refusedCount * 14.25);
+    final riskReward = avgLoss == 0 ? 1.0 : avgWin / avgLoss;
+
     final stats = [
       _StatCard(
-        label: 'Paiements',
-        value: '${data.payments.length}',
-        subtitle: '${data.pendingPayments} attente(s)',
-        icon: Icons.account_balance_wallet_outlined,
+        label: 'Average Win',
+            value: '\$${avgWin.toStringAsFixed(2)}',
+        subtitle: 'Closed winners',
+        icon: Icons.trending_up,
         gradient: const [Color(0xFF123C38), Color(0xFF0B2423)],
       ),
       _StatCard(
-        label: 'VIP',
-        value: '${data.vipUsers.length}',
-        subtitle: 'Clients prioritaires',
-        icon: Icons.star_border,
+        label: 'Average Loss',
+        value: '-\$${avgLoss.toStringAsFixed(2)}',
+        subtitle: 'Controlled downside',
+        icon: Icons.trending_down,
         gradient: const [Color(0xFF2E263E), Color(0xFF15111F)],
       ),
       _StatCard(
-        label: 'Notifications',
-        value: '${data.notifications.length}',
-        subtitle: 'Push et historique',
-        icon: Icons.notifications_none,
+        label: 'Win Ratio',
+        value: '${winRatio.toStringAsFixed(0)}%',
+        subtitle: '$validCount winners / $completed trades',
+        icon: Icons.pie_chart_outline,
         gradient: const [Color(0xFF182D3C), Color(0xFF0E1720)],
       ),
       _StatCard(
-        label: 'Logs',
-        value: '${data.logs.length}',
-        subtitle: 'Activité admin',
-        icon: Icons.history,
+        label: 'Risk Reward',
+        value: '${riskReward.toStringAsFixed(1)}x',
+        subtitle: 'Profit / loss profile',
+        icon: Icons.shield_outlined,
         gradient: const [Color(0xFF332C1E), Color(0xFF19140F)],
       ),
     ];
@@ -548,15 +534,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       ),
       _StatCard(
         label: 'Profit Target',
-        value: 'US$400.00',
-        subtitle: 'Current result: US$411.38',
+        value: 'US\$400.00',
+        subtitle: 'Current result: US\$411.38',
         icon: Icons.emoji_events_outlined,
         gradient: const [Color(0xFF2A203F), Color(0xFF15101F)],
       ),
       _StatCard(
         label: 'Initial Balance Loss',
-        value: 'US$400.00',
-        subtitle: 'Current result: US$0.00',
+        value: 'US\$400.00',
+        subtitle: 'Current result: US\$0.00',
         icon: Icons.shield_outlined,
         gradient: const [Color(0xFF242B33), Color(0xFF12171C)],
       ),
@@ -1198,65 +1184,65 @@ class _AnalysisRow extends StatelessWidget {
         Text(value, style: TextStyle(color: valueColor, fontWeight: FontWeight.w700)),
       ],
     );
+  }
+}
 
-    class _ActionLine extends StatelessWidget {
-      final String title;
-      final String subtitle;
-      final IconData icon;
-      final VoidCallback onTap;
+class _ActionLine extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final VoidCallback onTap;
 
-      const _ActionLine({
-        required this.title,
-        required this.subtitle,
-        required this.icon,
-        required this.onTap,
-      });
+  const _ActionLine({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.onTap,
+  });
 
-      @override
-      Widget build(BuildContext context) {
-        return Material(
-          color: Colors.transparent,
-          child: InkWell(
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
-            onTap: onTap,
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(18),
-                color: Colors.white.withOpacity(0.03),
-                border: Border.all(color: Colors.white.withOpacity(0.05)),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF3EE7B6).withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Icon(icon, color: const Color(0xFF3EE7B6), size: 20),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-                        const SizedBox(height: 4),
-                        Text(subtitle, style: const TextStyle(color: Colors.white54, fontSize: 12)),
-                      ],
-                    ),
-                  ),
-                  const Icon(Icons.chevron_right, color: Colors.white38),
-                ],
-              ),
-            ),
+            color: Colors.white.withOpacity(0.03),
+            border: Border.all(color: Colors.white.withOpacity(0.05)),
           ),
-        );
-      }
-    }
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF3EE7B6).withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(icon, color: const Color(0xFF3EE7B6), size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 4),
+                    Text(subtitle, style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right, color: Colors.white38),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 

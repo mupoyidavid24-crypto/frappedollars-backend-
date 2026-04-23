@@ -375,8 +375,49 @@ class SQLiteStorage:
                     "updated_at": now,
                 }
                 record = self._build_dispatch_record(dispatch_payload)
-                self._insert_dispatch_record(conn, record)
                 dispatched.append(record)
+
+            if dispatched:
+                conn.executemany(
+                    """
+                    INSERT INTO trade_dispatches (
+                        id, signal_id, master_login, client_login, ticket_id, action, symbol, trade_type,
+                        volume, open_price, sl, tp, status, retry_count, normalized_trade_id,
+                        trade_tag, tag_namespace, magic_number, broker_comment, client_ticket_id,
+                        last_error, created_at, updated_at, dispatched_at, executed_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    [
+                        (
+                            record["id"],
+                            record.get("signal_id"),
+                            record["master_login"],
+                            record["client_login"],
+                            record["ticket_id"],
+                            record["action"],
+                            record["symbol"],
+                            record["trade_type"],
+                            record["volume"],
+                            record["open_price"],
+                            record["sl"],
+                            record["tp"],
+                            record["status"],
+                            record["retry_count"],
+                            record["normalized_trade_id"],
+                            record["trade_tag"],
+                            record["tag_namespace"],
+                            record["magic_number"],
+                            record["broker_comment"],
+                            record["client_ticket_id"],
+                            record["last_error"],
+                            record["created_at"],
+                            record["updated_at"],
+                            record["dispatched_at"],
+                            record["executed_at"],
+                        )
+                        for record in dispatched
+                    ],
+                )
 
             signal_status = "DISPATCHED" if dispatched else "CREATED"
             conn.execute(

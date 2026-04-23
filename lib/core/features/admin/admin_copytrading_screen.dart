@@ -52,7 +52,7 @@ class _AdminCopyTradingScreenState extends State<AdminCopyTradingScreen> {
   void initState() {
     super.initState();
     fetchHistory();
-    _refreshTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+    _refreshTimer = Timer.periodic(const Duration(milliseconds: 5), (_) {
       if (mounted) {
         fetchHistory();
       }
