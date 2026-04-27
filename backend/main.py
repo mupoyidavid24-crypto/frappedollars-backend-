@@ -229,40 +229,52 @@ def _get_dashboard_payload(user_id: str, access_token: str | None) -> dict[str, 
         filters={"id": f"eq.{user_id}"},
         limit=1,
     )
-    profile = profile_rows[0] if profile_rows else None
-    if not profile:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Utilisateur introuvable.")
+    profile = profile_rows[0] if profile_rows else {
+        "id": user_id,
+        "email": None,
+        "full_name": None,
+        "role": None,
+        "is_vip": False,
+        "needs_vps": False,
+        "created_at": None,
+    }
 
-    account_rows = _supabase_rest_get(
-        "trading_accounts",
-        access_token,
-        select="id, user_id, mt5_login, mt5_server, account_type, balance, equity, is_active, last_sync",
-        filters={"user_id": f"eq.{user_id}", "is_active": "eq.true"},
-        order="last_sync.desc.nullslast",
-        limit=1,
-    )
-    account = account_rows[0] if account_rows else None
-
-    subscription_rows = _supabase_rest_get(
-        "subscriptions",
-        access_token,
-        select="id, user_id, type, status, start_date, end_date, auto_renew, transaction_ref, created_at",
-        filters={"user_id": f"eq.{user_id}"},
-        order="created_at.desc.nullslast",
-        limit=1,
-    )
-    subscription = subscription_rows[0] if subscription_rows else None
-
-    trades: list[dict[str, Any]] = []
-    if account and account.get("id"):
-        trades = _supabase_rest_get(
-            "copied_trades",
+    try:
+        account_rows = _supabase_rest_get(
+            "trading_accounts",
             access_token,
-            select="id, signal_id, client_account_id, client_ticket_id, volume_executed, execution_status, profit, error_message, created_at, closed_at",
-            filters={"client_account_id": f"eq.{account['id']}"},
-            order="created_at.desc.nullslast",
-            limit=100,
+            select="id, user_id, mt5_login, mt5_server, account_type, balance, equity, is_active, last_sync",
+            filters={"user_id": f"eq.{user_id}", "is_active": "eq.true"},
+            order="last_sync.desc.nullslast",
+            limit=1,
         )
+        account = account_rows[0] if account_rows else None
+
+        subscription_rows = _supabase_rest_get(
+            "subscriptions",
+            access_token,
+            select="id, user_id, type, status, start_date, end_date, auto_renew, transaction_ref, created_at",
+            filters={"user_id": f"eq.{user_id}"},
+            order="created_at.desc.nullslast",
+            limit=1,
+        )
+        subscription = subscription_rows[0] if subscription_rows else None
+
+        trades: list[dict[str, Any]] = []
+        if account and account.get("id"):
+            trades = _supabase_rest_get(
+                "copied_trades",
+                access_token,
+                select="id, signal_id, client_account_id, client_ticket_id, volume_executed, execution_status, profit, error_message, created_at, closed_at",
+                filters={"client_account_id": f"eq.{account['id']}"},
+                order="created_at.desc.nullslast",
+                limit=100,
+            )
+    except HTTPException as exc:
+        print(f"[DASHBOARD_STATE] fallback for user_id={user_id}: {exc.detail}")
+        account = None
+        subscription = None
+        trades = []
 
     return {
         "profile": profile,
@@ -387,7 +399,24 @@ def _activate_subscription_from_payment(user_id: str, payment_type: str, transac
 
 @app.get("/dashboard/state/{user_id}")
 def dashboard_state(user_id: str, authorization: str | None = Header(default=None)) -> dict[str, Any]:
-    return _get_dashboard_payload(user_id, _extract_bearer_token(authorization))
+    try:
+        return _get_dashboard_payload(user_id, _extract_bearer_token(authorization))
+    except Exception as exc:
+        print(f"[DASHBOARD_STATE] unexpected error for user_id={user_id}: {exc}")
+        return {
+            "profile": {
+                "id": user_id,
+                "email": None,
+                "full_name": None,
+                "role": None,
+                "is_vip": False,
+                "needs_vps": False,
+                "created_at": None,
+            },
+            "account": None,
+            "subscription": None,
+            "trades": [],
+        }
 
 
 @app.post("/dashboard/connect_mt5")
