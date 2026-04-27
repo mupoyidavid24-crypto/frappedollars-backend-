@@ -15,6 +15,7 @@ class _AdminPaymentsScreenState extends State<AdminPaymentsScreen> {
   List<Map<String, dynamic>> payments = [];
   String filterStatus = 'TOUS';
   bool loading = false;
+  bool _isFetchingPayments = false;
   Timer? _refreshTimer;
 
   @override
@@ -35,6 +36,8 @@ class _AdminPaymentsScreenState extends State<AdminPaymentsScreen> {
   }
 
   void fetchPayments() async {
+    if (_isFetchingPayments) return;
+    _isFetchingPayments = true;
     setState(() {
       loading = true;
     });

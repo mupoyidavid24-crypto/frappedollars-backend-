@@ -44,7 +44,8 @@ input string   InpBackendUrl   = "https://frappedollars-backend-1.onrender.com";
 input string   InpBroker       = "Deriv";                    // Nom du broker (à renseigner)
 input string   InpServer       = "Demo";                      // Nom du serveur (à renseigner)
 input string   InpAccountType  = "DEMO";                      // Type de compte (LIVE/DEMO)
-input int      InpTimerMilliseconds = 5;                      // Vérification toutes les 5 ms
+input int      InpTimerMilliseconds = 100;                    // Vérification toutes les 100 ms
+input int      InpPendingTradesWaitMs = 100;                  // Long-poll backend pendant 100 ms max
 input int      InpRequestTimeoutMs = 500;                     // Timeout WebRequest en millisecondes
 input string   InpApiKey       = "";                           // Clé API à renseigner (copier/coller depuis le backend)
 input bool     InpRunIdentitySelfTest = true;                  // Active le self-test tag/magic/comment au démarrage
@@ -53,6 +54,7 @@ input bool     InpRunIdentitySelfTest = true;                  // Active le self
 //--- Globals
 CTrade         G_Trade;
 string         G_ClientId;
+bool           G_PendingTradesFetchInProgress = false;
 
 #define TAG_LENGTH 13
 #define SYSTEM_PREFIX 410000000
@@ -538,17 +540,27 @@ int OnInit()
 
 void OnDeinit(const int reason) { EventKillTimer(); }
 
-void OnTimer() { FetchAndExecute(); }
+void OnTimer()
+{
+   if(G_PendingTradesFetchInProgress)
+      return;
+   FetchAndExecute();
+}
 
 //+------------------------------------------------------------------+
 //| Fetch trades from Backend and Execute them                       |
 //+------------------------------------------------------------------+
 void FetchAndExecute()
 {
+   if(G_PendingTradesFetchInProgress)
+      return;
+
+   G_PendingTradesFetchInProgress = true;
+
    uchar data[];
    uchar result[];
    string result_headers = "";
-   string url = InpBackendUrl + "/client/pending_trades/" + G_ClientId + "?wait_ms=5";
+   string url = InpBackendUrl + "/client/pending_trades/" + G_ClientId + "?wait_ms=" + IntegerToString(InpPendingTradesWaitMs);
 
    string headers = "";
    if(StringLen(InpApiKey) > 0)
@@ -579,6 +591,7 @@ void FetchAndExecute()
       if(!hasItemsEnvelope && !hasPendingEnvelope)
       {
          Print("[FLOW] ERREUR: format JSON invalide (clé items/pending_trades absente).");
+         G_PendingTradesFetchInProgress = false;
          return;
       }
 
@@ -591,11 +604,13 @@ void FetchAndExecute()
       if(StringFind(jsonResponse, "\"items\":[]") >= 0 || StringFind(jsonResponse, "\"items\": []") >= 0 || StringFind(jsonResponse, "\"pending_trades\":[]") >= 0 || StringFind(jsonResponse, "\"pending_trades\": []") >= 0)
       {
          Print("[FLOW] Aucun trade réel (items vide). version=", responseVersion);
+         G_PendingTradesFetchInProgress = false;
          return;
       }
 
       Print("[FLOW] Trades en attente détectés, passage au parsing.");
       ParseAndProcess(jsonResponse);
+      G_PendingTradesFetchInProgress = false;
    }
    else if(res == 401 && IsTargetAuthBypassClient() && !G_AuthBypassSmokeTestTriggered)
    {
@@ -606,6 +621,7 @@ void FetchAndExecute()
          ParseAndProcess(smokeTestJson);
       else
          Print("[AUTH] Impossible de construire le smoke test local.");
+      G_PendingTradesFetchInProgress = false;
    }
    else
    {
@@ -614,6 +630,7 @@ void FetchAndExecute()
       else if(res == 403)
          Print("[FLOW] AUTH ERROR: /client/pending_trades a répondu 403. Vérifier le rôle de la clé API pour le login ", G_ClientId);
       Print("[FLOW] GET /client/pending_trades échec code=", res, " last_error=", GetLastError());
+      G_PendingTradesFetchInProgress = false;
    }
 }
 

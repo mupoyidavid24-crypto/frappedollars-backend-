@@ -17,6 +17,7 @@ class _AdminCopyTradingScreenState extends State<AdminCopyTradingScreen> {
   bool loading = false;
   final TextEditingController _clientIdController = TextEditingController();
   Timer? _refreshTimer;
+  bool _isFetchingHistory = false;
 
   void toggleCopyTrading(String clientId) async {
     setState(() { loading = true; });
@@ -35,16 +36,29 @@ class _AdminCopyTradingScreenState extends State<AdminCopyTradingScreen> {
     }
   }
 
-  void fetchHistory() async {
+  Future<void> fetchHistory() async {
+    if (_isFetchingHistory) {
+      return;
+    }
+
+    _isFetchingHistory = true;
     setState(() { loading = true; });
     try {
       final result = await CopyTradingAdminService.fetchHistory();
+      if (!mounted) {
+        return;
+      }
       setState(() { history = result; loading = false; });
     } catch (e) {
+      if (!mounted) {
+        return;
+      }
       setState(() { loading = false; });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Erreur chargement historique'))
       );
+    } finally {
+      _isFetchingHistory = false;
     }
   }
 
@@ -52,7 +66,7 @@ class _AdminCopyTradingScreenState extends State<AdminCopyTradingScreen> {
   void initState() {
     super.initState();
     fetchHistory();
-    _refreshTimer = Timer.periodic(const Duration(milliseconds: 5), (_) {
+    _refreshTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       if (mounted) {
         fetchHistory();
       }

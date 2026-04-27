@@ -14,6 +14,7 @@ class AdminNotificationsScreen extends StatefulWidget {
 class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
   List<Map<String, dynamic>> notifications = [];
   bool loading = false;
+  bool _isFetchingNotifications = false;
   Timer? _refreshTimer;
 
   void sendNotification({String? userId, String? title, String? message, String? priority}) async {
@@ -38,15 +39,21 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
   }
 
   void fetchNotifications() async {
+    if (_isFetchingNotifications) return;
+    _isFetchingNotifications = true;
     setState(() { loading = true; });
     try {
       final result = await NotificationAdminService.fetchNotifications();
+      if (!mounted) return;
       setState(() { notifications = result; loading = false; });
     } catch (e) {
+      if (!mounted) return;
       setState(() { loading = false; });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Erreur chargement notifications'))
       );
+    } finally {
+      _isFetchingNotifications = false;
     }
   }
 

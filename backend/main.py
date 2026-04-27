@@ -117,6 +117,65 @@ class PaymentVerifyPayload(BaseModel):
     currency: str = Field(default="USD")
 
 
+class DashboardConnectPayload(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    user_id: str = Field(min_length=1)
+    mt5_login: str = Field(min_length=1)
+    mt5_server: str = Field(min_length=1)
+    account_type: Literal["MASTER", "CLIENT"] = "CLIENT"
+    is_active: bool = True
+
+
+def _get_dashboard_payload(user_id: str) -> dict[str, Any]:
+    profile_response = (
+        supabase.table("profiles").select("id, email, full_name, role, is_vip, needs_vps, created_at").eq("id", user_id).maybe_single().execute()
+    )
+    profile = profile_response.data
+    if not profile:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Utilisateur introuvable.")
+
+    account_response = (
+        supabase.table("trading_accounts")
+        .select("id, user_id, mt5_login, mt5_server, account_type, balance, equity, is_active, last_sync")
+        .eq("user_id", user_id)
+        .eq("is_active", True)
+        .order("last_sync", desc=True)
+        .limit(1)
+        .execute()
+    )
+    account = (account_response.data or [None])[0]
+
+    subscription_response = (
+        supabase.table("subscriptions")
+        .select("id, user_id, type, status, start_date, end_date, auto_renew, transaction_ref, created_at")
+        .eq("user_id", user_id)
+        .order("created_at", desc=True)
+        .limit(1)
+        .execute()
+    )
+    subscription = (subscription_response.data or [None])[0]
+
+    trades: list[dict[str, Any]] = []
+    if account and account.get("id"):
+        trades_response = (
+            supabase.table("copied_trades")
+            .select("id, signal_id, client_account_id, client_ticket_id, volume_executed, execution_status, profit, error_message, created_at, closed_at")
+            .eq("client_account_id", account["id"])
+            .order("created_at", desc=True)
+            .limit(100)
+            .execute()
+        )
+        trades = trades_response.data or []
+
+    return {
+        "profile": profile,
+        "account": account,
+        "subscription": subscription,
+        "trades": trades,
+    }
+
+
 def _verify_ea_api_key(mt5_login: str, provided_api_key: str | None, expected_role: str) -> dict[str, Any]:
     if not provided_api_key:
         raise HTTPException(
@@ -230,6 +289,58 @@ def _activate_subscription_from_payment(user_id: str, payment_type: str, transac
     return result.data
 
 
+@app.get("/dashboard/state/{user_id}")
+def dashboard_state(user_id: str) -> dict[str, Any]:
+    return _get_dashboard_payload(user_id)
+
+
+@app.post("/dashboard/connect_mt5")
+def dashboard_connect_mt5(payload: DashboardConnectPayload) -> dict[str, Any]:
+    existing = (
+        supabase.table("trading_accounts")
+        .select("id")
+        .eq("user_id", payload.user_id)
+        .eq("account_type", payload.account_type)
+        .order("last_sync", desc=True)
+        .limit(1)
+        .execute()
+    )
+
+    account_data = {
+        "user_id": payload.user_id,
+        "mt5_login": payload.mt5_login,
+        "mt5_server": payload.mt5_server,
+        "account_type": payload.account_type,
+        "is_active": payload.is_active,
+        "last_sync": utc_now(),
+    }
+
+    if existing.data:
+        account_id = existing.data[0]["id"]
+        result = (
+            supabase.table("trading_accounts")
+            .update(account_data)
+            .eq("id", account_id)
+            .execute()
+        )
+    else:
+        result = supabase.table("trading_accounts").insert(account_data).execute()
+
+    return {"status": "ok", "account": (result.data or [None])[0]}
+
+
+@app.post("/dashboard/disconnect_mt5/{user_id}")
+def dashboard_disconnect_mt5(user_id: str) -> dict[str, Any]:
+    result = (
+        supabase.table("trading_accounts")
+        .update({"is_active": False, "last_sync": utc_now()})
+        .eq("user_id", user_id)
+        .eq("account_type", "CLIENT")
+        .execute()
+    )
+    return {"status": "ok", "updated": len(result.data or [])}
+
+
 @app.post("/admin/login")
 def admin_login(payload: AdminLoginPayload) -> dict[str, str]:
     admin_username = os.getenv("ADMIN_USERNAME", "admin")
@@ -318,7 +429,7 @@ def master_trade(
 def client_pending_trades(
     mt5_login: str,
     limit: int = Query(default=20, ge=1, le=100),
-    wait_ms: int = Query(default=0, ge=0, le=2000),
+    wait_ms: int = Query(default=100, ge=0, le=2000),
     x_api_key: str | None = Header(default=None),
 ) -> dict[str, Any]:
     _verify_ea_api_key(mt5_login, x_api_key, expected_role="CLIENT")

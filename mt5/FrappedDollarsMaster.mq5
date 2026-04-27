@@ -104,8 +104,8 @@ void SyncTrades()
       {
          // On envoie le CLOSE avec les dernières infos connues
          SendToAPI(
-            ticket,
-            "CLOSE",
+ticket,
+            "CLOSE"            ,
             G_ActiveTrades[i].symbol,
             G_ActiveTrades[i].trade_type,
             G_ActiveTrades[i].volume,

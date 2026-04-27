@@ -136,8 +136,40 @@ def get_copytrading_history(admin=Depends(get_current_admin)):
 def list_users(admin=Depends(get_current_admin)):
     del admin
     try:
-        res = supabase.table("profiles").select("id, email, full_name, role, is_vip, needs_vps, created_at").execute()
-        return res.data or []
+        profiles = (
+            supabase.table("profiles")
+            .select("id, email, full_name, role, is_vip, needs_vps, created_at")
+            .order("created_at", desc=True)
+            .execute()
+        )
+        accounts = (
+            supabase.table("trading_accounts")
+            .select("id, user_id, mt5_login, account_type, is_active, master_account_id, created_at")
+            .order("created_at", desc=True)
+            .execute()
+        )
+
+        accounts_by_user_id: dict[str, list[dict[str, Any]]] = {}
+        for account in accounts.data or []:
+            user_id = str(account.get("user_id") or "")
+            if not user_id:
+                continue
+            accounts_by_user_id.setdefault(user_id, []).append(account)
+
+        users: list[dict[str, Any]] = []
+        for profile in profiles.data or []:
+            user_id = str(profile.get("id") or "")
+            linked_accounts = accounts_by_user_id.get(user_id, [])
+            users.append(
+                {
+                    **profile,
+                    "trading_accounts": linked_accounts,
+                    "mt5_logins": [account.get("mt5_login") for account in linked_accounts if account.get("mt5_login")],
+                    "has_trading_account": bool(linked_accounts),
+                }
+            )
+
+        return users
     except Exception as exc:
         print(f"Erreur users: {exc}")
         return []

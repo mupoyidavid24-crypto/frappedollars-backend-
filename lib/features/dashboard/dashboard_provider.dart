@@ -1,7 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import '../../core/services/supabase_service.dart';
+import 'package:http/http.dart' as http;
+
+import '../../core/constants/constants.dart';
 import '../../models/trading_account_model.dart';
 import '../../models/subscription_model.dart';
 import '../../models/trade_model.dart';
@@ -10,9 +13,10 @@ import 'package:flutter/services.dart' show rootBundle;
 
 
 class DashboardProvider extends ChangeNotifier {
-  final SupabaseService _supabaseService = SupabaseService();
   Timer? _liveRefreshTimer;
   String? _activeUserId;
+  bool _isRefreshing = false;
+  bool _liveSyncPaused = false;
   
   TradingAccount? _account;
   Subscription? _subscription;
@@ -30,35 +34,37 @@ class DashboardProvider extends ChangeNotifier {
     }
 
     _activeUserId = userId;
+    _liveSyncPaused = false;
     _liveRefreshTimer?.cancel();
-    _liveRefreshTimer = Timer.periodic(const Duration(milliseconds: 5), (_) {
+    await loadDashboardData(userId);
+
+    if (_liveSyncPaused) {
+      return;
+    }
+
+    _liveRefreshTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       refreshDashboardData();
     });
-
-    await loadDashboardData(userId);
   }
 
   Future<void> refreshDashboardData() async {
     final userId = _activeUserId;
-    if (userId == null) {
+    if (userId == null || _isRefreshing) {
       return;
     }
 
+    _isRefreshing = true;
+
     try {
-      final account = await _supabaseService.getTradingAccount(userId);
-      final subscription = await _supabaseService.getSubscription(userId);
-      List<Trade> trades = <Trade>[];
-
-      if (account != null && account.id != null) {
-        trades = await _supabaseService.getCopiedTrades(account.id!);
-      }
-
-      _account = account;
-      _subscription = subscription;
-      _trades = trades;
+      await _loadFromBackend(userId);
       notifyListeners();
     } catch (e) {
       debugPrint('Error refreshing dashboard data: $e');
+      if (_isNetworkFailure(e)) {
+        _pauseLiveSync('refresh');
+      }
+    } finally {
+      _isRefreshing = false;
     }
   }
 
@@ -73,20 +79,78 @@ class DashboardProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _account = await _supabaseService.getTradingAccount(userId);
-      _subscription = await _supabaseService.getSubscription(userId);
-      
-      if (_account != null && _account!.id != null) {
-        _trades = await _supabaseService.getCopiedTrades(_account!.id!);
-      } else {
-        _trades = [];
-      }
+      await _loadFromBackend(userId);
     } catch (e) {
       debugPrint("Error loading dashboard data: $e");
+      if (_isNetworkFailure(e)) {
+        _pauseLiveSync('load');
+      }
     } finally {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  Future<void> _loadFromBackend(String userId) async {
+    final response = await http.get(
+      Uri.parse('${AppConstants.backendBaseUrl}/dashboard/state/$userId'),
+      headers: const {'Accept': 'application/json'},
+    );
+
+    if (response.statusCode == 404) {
+      _account = null;
+      _subscription = null;
+      _trades = [];
+      return;
+    }
+
+    if (response.statusCode >= 500) {
+      throw Exception('Backend dashboard error ${response.statusCode}');
+    }
+
+    if (response.statusCode != 200) {
+      throw Exception('Backend dashboard error ${response.statusCode}: ${response.body}');
+    }
+
+    final decoded = json.decode(response.body) as Map<String, dynamic>;
+    final accountJson = decoded['account'];
+    final subscriptionJson = decoded['subscription'];
+    final tradesJson = decoded['trades'];
+
+    _account = accountJson is Map<String, dynamic>
+        ? TradingAccount.fromJson(accountJson)
+        : null;
+    _subscription = subscriptionJson is Map<String, dynamic>
+        ? Subscription.fromJson(subscriptionJson)
+        : null;
+    _trades = tradesJson is List
+        ? tradesJson
+            .whereType<Map>()
+            .map((item) => Trade.fromJson(Map<String, dynamic>.from(item)))
+            .toList()
+        : [];
+  }
+
+  void _pauseLiveSync(String source) {
+    if (_liveSyncPaused) {
+      return;
+    }
+
+    _liveSyncPaused = true;
+    _liveRefreshTimer?.cancel();
+    _liveRefreshTimer = null;
+    debugPrint('Dashboard live sync paused after $source network failure.');
+  }
+
+  bool _isNetworkFailure(Object error) {
+    final message = error.toString().toLowerCase();
+    return message.contains('failed to fetch') ||
+        message.contains('clientexception') ||
+        message.contains('name_not_resolved') ||
+        message.contains('network changed') ||
+        message.contains('insufficient_resources') ||
+        message.contains('socket') ||
+        message.contains('connection');
   }
 
   Future<bool> connectMT5(String userId, String login, String server, String password) async {
@@ -94,16 +158,26 @@ class DashboardProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final newAccount = TradingAccount(
-        userId: userId,
-        mt5Login: login,
-        mt5Server: server,
-        accountType: 'CLIENT',
-        balance: 0.0,
-        equity: 0.0,
-        isActive: true,
+      final response = await http.post(
+        Uri.parse('${AppConstants.backendBaseUrl}/dashboard/connect_mt5'),
+        headers: const {'Accept': 'application/json', 'Content-Type': 'application/json'},
+        body: json.encode({
+          'user_id': userId,
+          'mt5_login': login,
+          'mt5_server': server,
+          'account_type': 'CLIENT',
+          'is_active': true,
+          'password': password,
+        }),
       );
-      await _supabaseService.saveTradingAccount(newAccount);
+
+      if (response.statusCode >= 500) {
+        throw Exception('Backend connect error ${response.statusCode}');
+      }
+      if (response.statusCode != 200) {
+        throw Exception('Backend connect error ${response.statusCode}: ${response.body}');
+      }
+
       await loadDashboardData(userId);
       return true;
     } catch (e) {
@@ -119,8 +193,21 @@ class DashboardProvider extends ChangeNotifier {
      _isLoading = true;
     notifyListeners();
     try {
+      final response = await http.post(
+        Uri.parse('${AppConstants.backendBaseUrl}/dashboard/disconnect_mt5/$userId'),
+        headers: const {'Accept': 'application/json'},
+      );
+
+      if (response.statusCode >= 500) {
+        throw Exception('Backend disconnect error ${response.statusCode}');
+      }
+      if (response.statusCode != 200) {
+        throw Exception('Backend disconnect error ${response.statusCode}: ${response.body}');
+      }
+
       _account = null;
       _trades = [];
+      _subscription = null;
     } catch (e) {
       debugPrint("Error disconnecting MT5: $e");
     } finally {

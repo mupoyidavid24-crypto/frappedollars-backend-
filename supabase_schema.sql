@@ -255,16 +255,35 @@ ALTER TABLE learning_content ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ea_api_keys ENABLE ROW LEVEL SECURITY;
 ALTER TABLE trade_dispatches ENABLE ROW LEVEL SECURITY;
 
+-- Helper used by admin read policies without recursive RLS checks
+CREATE OR REPLACE FUNCTION public.is_admin_user()
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+    SELECT EXISTS (
+        SELECT 1
+        FROM public.profiles admin_profile
+        WHERE admin_profile.id = auth.uid()
+          AND admin_profile.role = 'ADMIN'
+    );
+$$;
+
 -- Policies
 -- Profiles: View and Update own
 DROP POLICY IF EXISTS "Users can view own profile" ON profiles;
 CREATE POLICY "Users can view own profile" ON profiles FOR SELECT USING (auth.uid() = id);
+DROP POLICY IF EXISTS "Admins can view all profiles" ON profiles;
+CREATE POLICY "Admins can view all profiles" ON profiles FOR SELECT USING (public.is_admin_user());
 DROP POLICY IF EXISTS "Users can update own profile" ON profiles;
 CREATE POLICY "Users can update own profile" ON profiles FOR UPDATE USING (auth.uid() = id);
 
 -- Trading Accounts: View own
 DROP POLICY IF EXISTS "Users can view own accounts" ON trading_accounts;
 CREATE POLICY "Users can view own accounts" ON trading_accounts FOR SELECT USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Admins can view all trading accounts" ON trading_accounts;
+CREATE POLICY "Admins can view all trading accounts" ON trading_accounts FOR SELECT USING (public.is_admin_user());
 
 -- Subscriptions: View own
 DROP POLICY IF EXISTS "Users can view own subscriptions" ON subscriptions;

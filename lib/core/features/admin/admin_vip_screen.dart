@@ -14,6 +14,7 @@ class AdminVIPScreen extends StatefulWidget {
 class _AdminVIPScreenState extends State<AdminVIPScreen> {
   List<Map<String, dynamic>> vipUsers = [];
   bool loading = false;
+  bool _isFetchingVIP = false;
   Timer? _refreshTimer;
 
   void toggleVIP(String userId, bool isVIP) async {
@@ -33,15 +34,21 @@ class _AdminVIPScreenState extends State<AdminVIPScreen> {
   }
 
   void fetchVIPUsers() async {
+    if (_isFetchingVIP) return;
+    _isFetchingVIP = true;
     setState(() { loading = true; });
     try {
       final result = await VIPAdminService.fetchVIPUsers();
+      if (!mounted) return;
       setState(() { vipUsers = result; loading = false; });
     } catch (e) {
+      if (!mounted) return;
       setState(() { loading = false; });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Erreur chargement VIP'))
       );
+    } finally {
+      _isFetchingVIP = false;
     }
   }
 
