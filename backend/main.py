@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field
+import requests
 
 from backend.admin_routes import router as admin_router
 from backend.ea_generator import router as ea_router
@@ -24,6 +25,8 @@ BASE_DIR = os.path.dirname(__file__)
 load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 ADMIN_API_KEY = os.getenv("ADMIN_API_KEY") or "a23112857d84806ef3201f526ea2558a"
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_ANON_KEY = os.getenv("SUPABASE_KEY")
 SQLITE_DB_PATH = os.getenv(
     "SQLITE_DB_PATH",
     os.path.join(BASE_DIR, "runtime", "pipeline.db"),
@@ -127,46 +130,139 @@ class DashboardConnectPayload(BaseModel):
     is_active: bool = True
 
 
-def _get_dashboard_payload(user_id: str) -> dict[str, Any]:
-    profile_response = (
-        supabase.table("profiles").select("id, email, full_name, role, is_vip, needs_vps, created_at").eq("id", user_id).maybe_single().execute()
+def _extract_bearer_token(authorization: str | None) -> str | None:
+    if not authorization:
+        return None
+    if authorization.lower().startswith("bearer "):
+        return authorization.split(" ", 1)[1].strip() or None
+    return authorization.strip() or None
+
+
+def _supabase_rest_headers(access_token: str | None) -> dict[str, str]:
+    api_key = SUPABASE_ANON_KEY
+    if not SUPABASE_URL or not api_key:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="SUPABASE_URL ou SUPABASE_KEY n'est pas configuree sur le backend.",
+        )
+
+    bearer = access_token or api_key
+    return {
+        "apikey": api_key,
+        "Authorization": f"Bearer {bearer}",
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "Prefer": "return=representation",
+    }
+
+
+def _supabase_rest_get(
+    table: str,
+    access_token: str | None,
+    *,
+    select: str,
+    filters: dict[str, str] | None = None,
+    order: str | None = None,
+    limit: int | None = None,
+) -> list[dict[str, Any]]:
+    params: dict[str, str | int] = {"select": select}
+    for key, value in (filters or {}).items():
+        params[key] = value
+    if order:
+        params["order"] = order
+    if limit is not None:
+        params["limit"] = limit
+
+    response = requests.get(
+        f"{SUPABASE_URL.rstrip('/')}/rest/v1/{table}",
+        headers=_supabase_rest_headers(access_token),
+        params=params,
+        timeout=30,
     )
-    profile = profile_response.data
+    if response.status_code >= 400:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Supabase {table} query failed: {response.text}",
+        )
+
+    decoded = response.json()
+    return decoded if isinstance(decoded, list) else [decoded]
+
+
+def _supabase_rest_mutate(
+    method: str,
+    table: str,
+    access_token: str | None,
+    *,
+    payload: dict[str, Any],
+    filters: dict[str, str] | None = None,
+) -> list[dict[str, Any]]:
+    params: dict[str, str] = {}
+    for key, value in (filters or {}).items():
+        params[key] = value
+
+    response = requests.request(
+        method,
+        f"{SUPABASE_URL.rstrip('/')}/rest/v1/{table}",
+        headers=_supabase_rest_headers(access_token),
+        params=params,
+        json=payload,
+        timeout=30,
+    )
+    if response.status_code >= 400:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Supabase {table} mutation failed: {response.text}",
+        )
+
+    if not response.text.strip():
+        return []
+    decoded = response.json()
+    return decoded if isinstance(decoded, list) else [decoded]
+
+
+def _get_dashboard_payload(user_id: str, access_token: str | None) -> dict[str, Any]:
+    profile_rows = _supabase_rest_get(
+        "profiles",
+        access_token,
+        select="id, email, full_name, role, is_vip, needs_vps, created_at",
+        filters={"id": f"eq.{user_id}"},
+        limit=1,
+    )
+    profile = profile_rows[0] if profile_rows else None
     if not profile:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Utilisateur introuvable.")
 
-    account_response = (
-        supabase.table("trading_accounts")
-        .select("id, user_id, mt5_login, mt5_server, account_type, balance, equity, is_active, last_sync")
-        .eq("user_id", user_id)
-        .eq("is_active", True)
-        .order("last_sync", desc=True)
-        .limit(1)
-        .execute()
+    account_rows = _supabase_rest_get(
+        "trading_accounts",
+        access_token,
+        select="id, user_id, mt5_login, mt5_server, account_type, balance, equity, is_active, last_sync",
+        filters={"user_id": f"eq.{user_id}", "is_active": "eq.true"},
+        order="last_sync.desc.nullslast",
+        limit=1,
     )
-    account = (account_response.data or [None])[0]
+    account = account_rows[0] if account_rows else None
 
-    subscription_response = (
-        supabase.table("subscriptions")
-        .select("id, user_id, type, status, start_date, end_date, auto_renew, transaction_ref, created_at")
-        .eq("user_id", user_id)
-        .order("created_at", desc=True)
-        .limit(1)
-        .execute()
+    subscription_rows = _supabase_rest_get(
+        "subscriptions",
+        access_token,
+        select="id, user_id, type, status, start_date, end_date, auto_renew, transaction_ref, created_at",
+        filters={"user_id": f"eq.{user_id}"},
+        order="created_at.desc.nullslast",
+        limit=1,
     )
-    subscription = (subscription_response.data or [None])[0]
+    subscription = subscription_rows[0] if subscription_rows else None
 
     trades: list[dict[str, Any]] = []
     if account and account.get("id"):
-        trades_response = (
-            supabase.table("copied_trades")
-            .select("id, signal_id, client_account_id, client_ticket_id, volume_executed, execution_status, profit, error_message, created_at, closed_at")
-            .eq("client_account_id", account["id"])
-            .order("created_at", desc=True)
-            .limit(100)
-            .execute()
+        trades = _supabase_rest_get(
+            "copied_trades",
+            access_token,
+            select="id, signal_id, client_account_id, client_ticket_id, volume_executed, execution_status, profit, error_message, created_at, closed_at",
+            filters={"client_account_id": f"eq.{account['id']}"},
+            order="created_at.desc.nullslast",
+            limit=100,
         )
-        trades = trades_response.data or []
 
     return {
         "profile": profile,
@@ -290,20 +386,20 @@ def _activate_subscription_from_payment(user_id: str, payment_type: str, transac
 
 
 @app.get("/dashboard/state/{user_id}")
-def dashboard_state(user_id: str) -> dict[str, Any]:
-    return _get_dashboard_payload(user_id)
+def dashboard_state(user_id: str, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    return _get_dashboard_payload(user_id, _extract_bearer_token(authorization))
 
 
 @app.post("/dashboard/connect_mt5")
-def dashboard_connect_mt5(payload: DashboardConnectPayload) -> dict[str, Any]:
-    existing = (
-        supabase.table("trading_accounts")
-        .select("id")
-        .eq("user_id", payload.user_id)
-        .eq("account_type", payload.account_type)
-        .order("last_sync", desc=True)
-        .limit(1)
-        .execute()
+def dashboard_connect_mt5(payload: DashboardConnectPayload, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    access_token = _extract_bearer_token(authorization)
+    existing_rows = _supabase_rest_get(
+        "trading_accounts",
+        access_token,
+        select="id",
+        filters={"user_id": f"eq.{payload.user_id}", "account_type": f"eq.{payload.account_type}"},
+        order="last_sync.desc.nullslast",
+        limit=1,
     )
 
     account_data = {
@@ -315,30 +411,32 @@ def dashboard_connect_mt5(payload: DashboardConnectPayload) -> dict[str, Any]:
         "last_sync": utc_now(),
     }
 
-    if existing.data:
-        account_id = existing.data[0]["id"]
-        result = (
-            supabase.table("trading_accounts")
-            .update(account_data)
-            .eq("id", account_id)
-            .execute()
+    if existing_rows:
+        account_id = existing_rows[0]["id"]
+        result = _supabase_rest_mutate(
+            "PATCH",
+            "trading_accounts",
+            access_token,
+            payload=account_data,
+            filters={"id": f"eq.{account_id}"},
         )
     else:
-        result = supabase.table("trading_accounts").insert(account_data).execute()
+        result = _supabase_rest_mutate("POST", "trading_accounts", access_token, payload=account_data)
 
-    return {"status": "ok", "account": (result.data or [None])[0]}
+    return {"status": "ok", "account": (result or [None])[0]}
 
 
 @app.post("/dashboard/disconnect_mt5/{user_id}")
-def dashboard_disconnect_mt5(user_id: str) -> dict[str, Any]:
-    result = (
-        supabase.table("trading_accounts")
-        .update({"is_active": False, "last_sync": utc_now()})
-        .eq("user_id", user_id)
-        .eq("account_type", "CLIENT")
-        .execute()
+def dashboard_disconnect_mt5(user_id: str, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    access_token = _extract_bearer_token(authorization)
+    result = _supabase_rest_mutate(
+        "PATCH",
+        "trading_accounts",
+        access_token,
+        payload={"is_active": False, "last_sync": utc_now()},
+        filters={"user_id": f"eq.{user_id}", "account_type": "eq.CLIENT"},
     )
-    return {"status": "ok", "updated": len(result.data or [])}
+    return {"status": "ok", "updated": len(result)}
 
 
 @app.post("/admin/login")

@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/constants/constants.dart';
 import '../../models/trading_account_model.dart';
@@ -92,9 +93,13 @@ class DashboardProvider extends ChangeNotifier {
   }
 
   Future<void> _loadFromBackend(String userId) async {
+    final accessToken = Supabase.instance.client.auth.currentSession?.accessToken;
     final response = await http.get(
       Uri.parse('${AppConstants.backendBaseUrl}/dashboard/state/$userId'),
-      headers: const {'Accept': 'application/json'},
+      headers: {
+        'Accept': 'application/json',
+        if (accessToken != null && accessToken.isNotEmpty) 'Authorization': 'Bearer $accessToken',
+      },
     );
 
     if (response.statusCode == 404) {
@@ -158,16 +163,20 @@ class DashboardProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
+      final accessToken = Supabase.instance.client.auth.currentSession?.accessToken;
       final response = await http.post(
         Uri.parse('${AppConstants.backendBaseUrl}/dashboard/connect_mt5'),
-        headers: const {'Accept': 'application/json', 'Content-Type': 'application/json'},
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          if (accessToken != null && accessToken.isNotEmpty) 'Authorization': 'Bearer $accessToken',
+        },
         body: json.encode({
           'user_id': userId,
           'mt5_login': login,
           'mt5_server': server,
           'account_type': 'CLIENT',
           'is_active': true,
-          'password': password,
         }),
       );
 
@@ -193,9 +202,13 @@ class DashboardProvider extends ChangeNotifier {
      _isLoading = true;
     notifyListeners();
     try {
+      final accessToken = Supabase.instance.client.auth.currentSession?.accessToken;
       final response = await http.post(
         Uri.parse('${AppConstants.backendBaseUrl}/dashboard/disconnect_mt5/$userId'),
-        headers: const {'Accept': 'application/json'},
+        headers: {
+          'Accept': 'application/json',
+          if (accessToken != null && accessToken.isNotEmpty) 'Authorization': 'Bearer $accessToken',
+        },
       );
 
       if (response.statusCode >= 500) {
