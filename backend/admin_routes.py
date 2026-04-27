@@ -114,11 +114,17 @@ def get_copytrading_history(admin=Depends(get_current_admin)):
         )
         items: list[dict[str, Any]] = []
         for row in history.data or []:
+            status = (row.get("execution_status") or "").upper()
+            created_at = row.get("created_at")
+            closed_at = row.get("closed_at")
             items.append(
                 {
                     "id": row.get("id"),
-                    "action": row.get("execution_status") or row.get("error_message") or "COPY",
-                    "date": row.get("created_at") or row.get("closed_at"),
+                    "action": status or row.get("error_message") or "COPY",
+                    "status": status or "UNKNOWN",
+                    "date": created_at or closed_at,
+                    "created_at": created_at,
+                    "closed_at": closed_at,
                     "signal_id": row.get("signal_id"),
                     "client_account_id": row.get("client_account_id"),
                     "volume_executed": row.get("volume_executed"),
@@ -160,12 +166,16 @@ def list_users(admin=Depends(get_current_admin)):
         for profile in profiles.data or []:
             user_id = str(profile.get("id") or "")
             linked_accounts = accounts_by_user_id.get(user_id, [])
+            active_accounts = [account for account in linked_accounts if account.get("is_active")]
             users.append(
                 {
                     **profile,
                     "trading_accounts": linked_accounts,
                     "mt5_logins": [account.get("mt5_login") for account in linked_accounts if account.get("mt5_login")],
                     "has_trading_account": bool(linked_accounts),
+                    "active_trading_accounts": len(active_accounts),
+                    "inactive_trading_accounts": len(linked_accounts) - len(active_accounts),
+                    "primary_mt5_login": (linked_accounts[0].get("mt5_login") if linked_accounts else None),
                 }
             )
 
@@ -173,6 +183,21 @@ def list_users(admin=Depends(get_current_admin)):
     except Exception as exc:
         print(f"Erreur users: {exc}")
         return []
+
+
+@router.post("/users/activate/{user_id}")
+def activate_user(user_id: str, admin=Depends(get_current_admin)):
+    del admin
+    profile = supabase.table("profiles").select("id, is_vip").eq("id", user_id).maybe_single().execute()
+    profile_row = profile.data or {}
+    if not profile_row:
+        raise HTTPException(status_code=404, detail="Utilisateur introuvable")
+
+    next_role = "VIP" if profile_row.get("is_vip") else "CLIENT"
+    updated = supabase.table("profiles").update({"role": next_role}).eq("id", user_id).execute()
+    if not updated.data:
+        raise HTTPException(status_code=404, detail="Utilisateur introuvable")
+    return {"status": "active", "role": next_role}
 
 
 @router.post("/users/suspend/{user_id}")

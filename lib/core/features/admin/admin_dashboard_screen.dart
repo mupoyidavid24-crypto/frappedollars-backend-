@@ -1,5 +1,8 @@
+import 'dart:convert';
+
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
 import '../../constants/constants.dart';
 import 'admin_auth.dart';
@@ -32,6 +35,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       _safeFetch(VIPAdminService.fetchVIPUsers),
       _safeFetch(LogsAdminService.fetchLogs),
       _safeFetch(CopyTradingAdminService.fetchHistory),
+      _safeFetchMap(_fetchDashboardSummary),
     ]);
 
     final payments = List<Map<String, dynamic>>.from(results[0] as List);
@@ -39,6 +43,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     final vipUsers = List<Map<String, dynamic>>.from(results[2] as List);
     final logs = List<Map<String, dynamic>>.from(results[3] as List);
     final copytradingHistory = List<Map<String, dynamic>>.from(results[4] as List);
+    final summary = Map<String, dynamic>.from(results[5] as Map);
+
+    final usersSummary = Map<String, dynamic>.from(summary['users'] as Map? ?? {});
+    final accountsSummary = Map<String, dynamic>.from(summary['accounts'] as Map? ?? {});
+    final paymentsSummary = Map<String, dynamic>.from(summary['payments'] as Map? ?? {});
+    final copytradingSummary = Map<String, dynamic>.from(summary['copytrading'] as Map? ?? {});
+    final activitySummary = Map<String, dynamic>.from(summary['activity'] as Map? ?? {});
+    final recentUsers = List<Map<String, dynamic>>.from(summary['recent_users'] as List? ?? const []);
+    final recentCopytrades = List<Map<String, dynamic>>.from(summary['recent_copytrades'] as List? ?? const []);
 
     final pendingPayments = payments.where((item) => _statusOf(item) == 'EN_ATTENTE').length;
     final validatedPayments = payments.where((item) => _statusOf(item) == 'VALIDATED').length;
@@ -53,7 +66,51 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       pendingPayments: pendingPayments,
       validatedPayments: validatedPayments,
       refusedPayments: refusedPayments,
+      totalUsers: _asInt(usersSummary['total']),
+      activeUsers: _asInt(usersSummary['active']),
+      suspendedUsers: _asInt(usersSummary['suspended']),
+      vipUsersCount: _asInt(usersSummary['vip']),
+      usersWithMt5: _asInt(usersSummary['with_mt5']),
+      totalAccounts: _asInt(accountsSummary['total']),
+      activeAccounts: _asInt(accountsSummary['active']),
+      inactiveAccounts: _asInt(accountsSummary['inactive']),
+      masterAccounts: _asInt(accountsSummary['master']),
+      clientAccounts: _asInt(accountsSummary['client']),
+      totalPayments: _asInt(paymentsSummary['total']),
+      pendingPaymentsSummary: _asInt(paymentsSummary['pending']),
+      validatedPaymentsSummary: _asInt(paymentsSummary['validated']),
+      refusedPaymentsSummary: _asInt(paymentsSummary['refused']),
+      totalPaymentAmount: _asDouble(paymentsSummary['amount_total']),
+      signalsTotal: _asInt(copytradingSummary['signals_total']),
+      copiedTradesTotal: _asInt(copytradingSummary['copied_total']),
+      copyExecutedTrades: _asInt(copytradingSummary['executed']),
+      copyFailedTrades: _asInt(copytradingSummary['failed']),
+      copyPendingTrades: _asInt(copytradingSummary['pending']),
+      copyRetryTrades: _asInt(copytradingSummary['retry']),
+      averageCopyLatencyMs: _asDouble(copytradingSummary['average_latency_ms']),
+      dispatchCounts: Map<String, dynamic>.from(copytradingSummary['dispatch_pipeline'] as Map? ?? {}),
+      notificationsCount: _asInt(activitySummary['notifications']),
+      supportTicketsCount: _asInt(activitySummary['support_tickets']),
+      openTicketsCount: _asInt(activitySummary['open_tickets']),
+      activitySignalsCount: _asInt(activitySummary['signals']),
+      recentUsers: recentUsers,
+      recentCopytrades: recentCopytrades,
     );
+  }
+
+  Future<Map<String, dynamic>> _fetchDashboardSummary() async {
+    final response = await http.get(
+      Uri.parse('${AppConstants.adminBaseUrl}/dashboard/summary'),
+      headers: AdminAuth.headers(),
+    );
+    if (response.statusCode == 200) {
+      final decoded = json.decode(response.body);
+      if (decoded is Map<String, dynamic>) {
+        return decoded;
+      }
+      return Map<String, dynamic>.from(decoded as Map);
+    }
+    throw Exception('Erreur chargement synthèse admin');
   }
 
   Future<List<Map<String, dynamic>>> _safeFetch(Future<List<Map<String, dynamic>>> Function() fetcher) async {
@@ -62,6 +119,26 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     } catch (_) {
       return <Map<String, dynamic>>[];
     }
+  }
+
+  Future<Map<String, dynamic>> _safeFetchMap(Future<Map<String, dynamic>> Function() fetcher) async {
+    try {
+      return await fetcher();
+    } catch (_) {
+      return <String, dynamic>{};
+    }
+  }
+
+  int _asInt(dynamic value) {
+    if (value is int) return value;
+    if (value is double) return value.round();
+    return int.tryParse(value?.toString() ?? '') ?? 0;
+  }
+
+  double _asDouble(dynamic value) {
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    return double.tryParse(value?.toString() ?? '') ?? 0.0;
   }
 
   String _statusOf(Map<String, dynamic> item) {
@@ -145,7 +222,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   Widget _buildHeroSection(BuildContext context, _AdminDashboardData data, bool isWide) {
-    final totalSignals = data.payments.length + data.notifications.length + data.logs.length;
+    final totalSignals = data.signalsTotal + data.copiedTradesTotal;
 
     return Container(
       width: double.infinity,
@@ -228,9 +305,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 ],
               ),
               const Spacer(),
-              _MetricPill(label: 'Signals', value: '$totalSignals'),
+              _MetricPill(label: 'MT5', value: '${data.activeAccounts}'),
               const SizedBox(width: 8),
-              _MetricPill(label: 'VIP', value: '${data.vipUsers.length}'),
+              _MetricPill(label: 'Users', value: '${data.activeUsers}'),
             ],
           ),
           const SizedBox(height: 16),
@@ -245,10 +322,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 gridData: const FlGridData(show: false),
                 titlesData: const FlTitlesData(show: false),
                 borderData: FlBorderData(show: false),
-                lineTouchData: LineTouchData(
+                lineTouchData: const LineTouchData(
                   enabled: true,
                   touchTooltipData: LineTouchTooltipData(
-                    tooltipBgColor: const Color(0xFF101A1F),
+                    tooltipBgColor: Color(0xFF101A1F),
                   ),
                 ),
                 lineBarsData: [
@@ -306,11 +383,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             children: [
               const _SectionTitle(title: 'Account Loss Analysis'),
               const SizedBox(height: 12),
-              _AnalysisRow(label: 'Paiements en attente', value: '${data.pendingPayments}', valueColor: const Color(0xFFFFD66B)),
+              _AnalysisRow(label: 'Paiements en attente', value: '${data.pendingPaymentsSummary}', valueColor: const Color(0xFFFFD66B)),
               const SizedBox(height: 10),
-              _AnalysisRow(label: 'Paiements refusés', value: '${data.refusedPayments}', valueColor: const Color(0xFFFF7C7C)),
+              _AnalysisRow(label: 'Trades exécutés', value: '${data.copyExecutedTrades}', valueColor: const Color(0xFF3EE7B6)),
               const SizedBox(height: 10),
-              _AnalysisRow(label: 'Notifications', value: '${data.notifications.length}', valueColor: const Color(0xFF9AD7FF)),
+              _AnalysisRow(label: 'Trades échoués', value: '${data.copyFailedTrades}', valueColor: const Color(0xFFFF7C7C)),
+              const SizedBox(height: 10),
+              _AnalysisRow(label: 'Notifications', value: '${data.notificationsCount}', valueColor: const Color(0xFF9AD7FF)),
+              const SizedBox(height: 10),
+              _AnalysisRow(
+                label: 'Latence copie',
+                value: data.averageCopyLatencyMs == 0 ? 'n/a' : '${data.averageCopyLatencyMs.toStringAsFixed(0)} ms',
+                valueColor: const Color(0xFFB9F6E8),
+              ),
               const SizedBox(height: 14),
               LinearProgressIndicator(
                 value: _progressValue(data),
@@ -342,48 +427,40 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   double _progressValue(_AdminDashboardData data) {
-    final score = data.validatedPayments + data.vipUsers.length + data.notifications.length;
+    final score = data.validatedPaymentsSummary + data.activeUsers + data.copyExecutedTrades;
     if (score == 0) return 0.15;
-    final normalized = (score / 30).clamp(0.15, 0.95);
+    final normalized = (score / 50).clamp(0.15, 0.95);
     return normalized.toDouble();
   }
 
   Widget _buildStatsRow(_AdminDashboardData data, bool isWide) {
-    final validCount = data.validatedPayments;
-    final refusedCount = data.refusedPayments;
-    final completed = (validCount + refusedCount).clamp(1, 9999);
-    final winRatio = (validCount / completed) * 100;
-    final avgWin = 987.47 + (validCount * 12.75);
-    final avgLoss = 781.70 + (refusedCount * 14.25);
-    final riskReward = avgLoss == 0 ? 1.0 : avgWin / avgLoss;
-
     final stats = [
       _StatCard(
-        label: 'Average Win',
-            value: '\$${avgWin.toStringAsFixed(2)}',
-        subtitle: 'Closed winners',
-        icon: Icons.trending_up,
+            label: 'Utilisateurs actifs',
+            value: '${data.activeUsers}',
+            subtitle: '${data.totalUsers} comptes suivis',
+        icon: Icons.people_outline,
         gradient: const [Color(0xFF123C38), Color(0xFF0B2423)],
       ),
       _StatCard(
-        label: 'Average Loss',
-        value: '-\$${avgLoss.toStringAsFixed(2)}',
-        subtitle: 'Controlled downside',
-        icon: Icons.trending_down,
+            label: 'Paiements validés',
+            value: '${data.validatedPaymentsSummary}',
+            subtitle: '${data.pendingPaymentsSummary} en attente',
+        icon: Icons.phonelink,
         gradient: const [Color(0xFF2E263E), Color(0xFF15111F)],
       ),
       _StatCard(
-        label: 'Win Ratio',
-        value: '${winRatio.toStringAsFixed(0)}%',
-        subtitle: '$validCount winners / $completed trades',
-        icon: Icons.pie_chart_outline,
+            label: 'Volume paiements',
+            value: '\$${data.totalPaymentAmount.toStringAsFixed(2)}',
+            subtitle: '${data.notificationsCount} notifications envoyées',
+        icon: Icons.check_circle_outline,
         gradient: const [Color(0xFF182D3C), Color(0xFF0E1720)],
       ),
       _StatCard(
-        label: 'Risk Reward',
-        value: '${riskReward.toStringAsFixed(1)}x',
-        subtitle: 'Profit / loss profile',
-        icon: Icons.shield_outlined,
+        label: 'Latence copie',
+        value: data.averageCopyLatencyMs == 0 ? 'n/a' : '${data.averageCopyLatencyMs.toStringAsFixed(0)} ms',
+        subtitle: '${data.copyPendingTrades} en file',
+        icon: Icons.speed_outlined,
         gradient: const [Color(0xFF332C1E), Color(0xFF19140F)],
       ),
     ];
@@ -425,7 +502,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       _QuickActionCard(
         icon: Icons.sync_alt,
         title: 'Copy Trading',
-        subtitle: 'Statut et historique',
+        subtitle: 'Statut, historique et latence',
         onTap: () => Navigator.pushNamed(context, '/admin/copytrading'),
       ),
       _QuickActionCard(
@@ -473,6 +550,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 child: Column(
                   children: [
                     _GlassCard(
+                      child: _RecentUsersList(
+                        users: data.recentUsers,
+                        onActivate: _activateUser,
+                        onSuspend: _suspendUser,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _GlassCard(
                       child: _RecentActivityList(items: _recentActivitiesFrom(data)),
                     ),
                     const SizedBox(height: 16),
@@ -482,9 +567,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         children: [
                           const _SectionTitle(title: 'Raccourcis techniques'),
                           const SizedBox(height: 12),
-                          _InfoRow(label: 'Backend', value: AppConstants.backendBaseUrl),
+                          const _InfoRow(label: 'Backend', value: AppConstants.backendBaseUrl),
                           const SizedBox(height: 8),
-                          _InfoRow(label: 'Admin API', value: AppConstants.adminBaseUrl),
+                          const _InfoRow(label: 'Admin API', value: AppConstants.adminBaseUrl),
                           const SizedBox(height: 8),
                           _InfoRow(label: 'Admin connecté', value: AdminAuth.adminUsername ?? 'non connecté'),
                         ],
@@ -517,6 +602,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               ),
               const SizedBox(height: 16),
               _GlassCard(
+                child: _RecentUsersList(
+                  users: data.recentUsers,
+                  onActivate: _activateUser,
+                  onSuspend: _suspendUser,
+                ),
+              ),
+              const SizedBox(height: 16),
+              _GlassCard(
                 child: _RecentActivityList(items: _recentActivitiesFrom(data)),
               ),
             ],
@@ -526,23 +619,23 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   Widget _buildGoalOverview(_AdminDashboardData data, bool isWide) {
     final goalCards = [
       _StatCard(
-        label: 'Minimum Trading Days',
-        value: '1 Day',
-        subtitle: 'Current result: 1 Day',
+        label: 'Utilisateurs actifs',
+        value: '${data.activeUsers}',
+        subtitle: '${data.totalUsers} comptes suivis',
         icon: Icons.calendar_month_outlined,
         gradient: const [Color(0xFF17313A), Color(0xFF0E1E22)],
       ),
       _StatCard(
-        label: 'Profit Target',
-        value: 'US\$400.00',
-        subtitle: 'Current result: US\$411.38',
+        label: 'Paiements validés',
+        value: '${data.validatedPaymentsSummary}',
+        subtitle: '${data.pendingPaymentsSummary} en attente',
         icon: Icons.emoji_events_outlined,
         gradient: const [Color(0xFF2A203F), Color(0xFF15101F)],
       ),
       _StatCard(
-        label: 'Initial Balance Loss',
-        value: 'US\$400.00',
-        subtitle: 'Current result: US\$0.00',
+        label: 'Volume paiements',
+        value: '\$${data.totalPaymentAmount.toStringAsFixed(2)}',
+        subtitle: '${data.notificationsCount} notifications envoyées',
         icon: Icons.shield_outlined,
         gradient: const [Color(0xFF242B33), Color(0xFF12171C)],
       ),
@@ -582,6 +675,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         accent: const Color(0xFF3EE7B6),
       ));
     }
+    if (data.recentUsers.isNotEmpty) {
+      activities.add(_ActivityItem(
+        title: 'Utilisateurs suivis',
+        subtitle: '${data.recentUsers.length} comptes liés MT5 dans le résumé',
+        icon: Icons.people_outline,
+        accent: const Color(0xFF9AD7FF),
+      ));
+    }
     if (data.copytradingHistory.isNotEmpty) {
       activities.add(_ActivityItem(
         title: 'Copy trading',
@@ -598,6 +699,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         accent: const Color(0xFFFFD66B),
       ));
     }
+    if (data.copyFailedTrades > 0) {
+      activities.add(_ActivityItem(
+        title: 'Échecs copy trading',
+        subtitle: '${data.copyFailedTrades} trades en erreur',
+        icon: Icons.error_outline,
+        accent: const Color(0xFFFF7C7C),
+      ));
+    }
 
     if (activities.isEmpty) {
       activities.add(_ActivityItem(
@@ -611,9 +720,34 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     return activities.take(4).toList();
   }
 
-  void _showApiKeyInfo(BuildContext context) {
-    Navigator.pushNamed(context, '/admin/api-keys');
+  Future<void> _updateUserStatus(String userId, bool activate) async {
+    final path = activate ? '/users/activate/$userId' : '/users/suspend/$userId';
+    final response = await http.post(
+      Uri.parse('${AppConstants.adminBaseUrl}$path'),
+      headers: AdminAuth.headers(),
+    );
+
+    if (response.statusCode >= 400) {
+      throw Exception('Statut utilisateur non mis à jour');
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _dashboardFuture = _loadDashboardData();
+    });
   }
+
+  Future<void> _activateUser(String userId) async {
+    await _updateUserStatus(userId, true);
+  }
+
+  Future<void> _suspendUser(String userId) async {
+    await _updateUserStatus(userId, false);
+  }
+
 }
 
 class _AdminDashboardData {
@@ -622,9 +756,38 @@ class _AdminDashboardData {
   final List<Map<String, dynamic>> vipUsers;
   final List<Map<String, dynamic>> logs;
   final List<Map<String, dynamic>> copytradingHistory;
+  final List<Map<String, dynamic>> recentUsers;
+  final List<Map<String, dynamic>> recentCopytrades;
+  final Map<String, dynamic> dispatchCounts;
   final int pendingPayments;
   final int validatedPayments;
   final int refusedPayments;
+  final int totalUsers;
+  final int activeUsers;
+  final int suspendedUsers;
+  final int vipUsersCount;
+  final int usersWithMt5;
+  final int totalAccounts;
+  final int activeAccounts;
+  final int inactiveAccounts;
+  final int masterAccounts;
+  final int clientAccounts;
+  final int totalPayments;
+  final int pendingPaymentsSummary;
+  final int validatedPaymentsSummary;
+  final int refusedPaymentsSummary;
+  final double totalPaymentAmount;
+  final int signalsTotal;
+  final int copiedTradesTotal;
+  final int copyExecutedTrades;
+  final int copyFailedTrades;
+  final int copyPendingTrades;
+  final int copyRetryTrades;
+  final double averageCopyLatencyMs;
+  final int notificationsCount;
+  final int supportTicketsCount;
+  final int openTicketsCount;
+  final int activitySignalsCount;
 
   const _AdminDashboardData({
     required this.payments,
@@ -632,9 +795,38 @@ class _AdminDashboardData {
     required this.vipUsers,
     required this.logs,
     required this.copytradingHistory,
+    required this.recentUsers,
+    required this.recentCopytrades,
+    required this.dispatchCounts,
     required this.pendingPayments,
     required this.validatedPayments,
     required this.refusedPayments,
+    required this.totalUsers,
+    required this.activeUsers,
+    required this.suspendedUsers,
+    required this.vipUsersCount,
+    required this.usersWithMt5,
+    required this.totalAccounts,
+    required this.activeAccounts,
+    required this.inactiveAccounts,
+    required this.masterAccounts,
+    required this.clientAccounts,
+    required this.totalPayments,
+    required this.pendingPaymentsSummary,
+    required this.validatedPaymentsSummary,
+    required this.refusedPaymentsSummary,
+    required this.totalPaymentAmount,
+    required this.signalsTotal,
+    required this.copiedTradesTotal,
+    required this.copyExecutedTrades,
+    required this.copyFailedTrades,
+    required this.copyPendingTrades,
+    required this.copyRetryTrades,
+    required this.averageCopyLatencyMs,
+    required this.notificationsCount,
+    required this.supportTicketsCount,
+    required this.openTicketsCount,
+    required this.activitySignalsCount,
   });
 
   factory _AdminDashboardData.empty() {
@@ -644,9 +836,38 @@ class _AdminDashboardData {
       vipUsers: [],
       logs: [],
       copytradingHistory: [],
+      recentUsers: [],
+      recentCopytrades: [],
+      dispatchCounts: {},
       pendingPayments: 0,
       validatedPayments: 0,
       refusedPayments: 0,
+      totalUsers: 0,
+      activeUsers: 0,
+      suspendedUsers: 0,
+      vipUsersCount: 0,
+      usersWithMt5: 0,
+      totalAccounts: 0,
+      activeAccounts: 0,
+      inactiveAccounts: 0,
+      masterAccounts: 0,
+      clientAccounts: 0,
+      totalPayments: 0,
+      pendingPaymentsSummary: 0,
+      validatedPaymentsSummary: 0,
+      refusedPaymentsSummary: 0,
+      totalPaymentAmount: 0,
+      signalsTotal: 0,
+      copiedTradesTotal: 0,
+      copyExecutedTrades: 0,
+      copyFailedTrades: 0,
+      copyPendingTrades: 0,
+      copyRetryTrades: 0,
+      averageCopyLatencyMs: 0,
+      notificationsCount: 0,
+      supportTicketsCount: 0,
+      openTicketsCount: 0,
+      activitySignalsCount: 0,
     );
   }
 }
@@ -1070,6 +1291,110 @@ class _RecentActivityList extends StatelessWidget {
             child: _ActivityTile(item: item),
           ),
         ),
+      ],
+    );
+  }
+}
+
+class _RecentUsersList extends StatelessWidget {
+  final List<Map<String, dynamic>> users;
+  final Future<void> Function(String userId) onActivate;
+  final Future<void> Function(String userId) onSuspend;
+
+  const _RecentUsersList({
+    required this.users,
+    required this.onActivate,
+    required this.onSuspend,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionTitle(title: 'Utilisateurs MT5'),
+        const SizedBox(height: 12),
+        if (users.isEmpty)
+          const Text(
+            'Aucun utilisateur lié MT5 dans le résumé actuel.',
+            style: TextStyle(color: Colors.white54),
+          )
+        else
+          ...users.take(4).map(
+            (user) {
+              final userId = user['id']?.toString() ?? '';
+              final mt5Logins = List<String>.from(user['mt5_logins'] as List? ?? const []);
+              final isSuspended = (user['role']?.toString().toUpperCase() ?? '') == 'SUSPENDED';
+
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(18),
+                    color: Colors.white.withOpacity(0.03),
+                    border: Border.all(color: Colors.white.withOpacity(0.05)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: const Color(AppConstants.primaryColor).withOpacity(0.12),
+                            ),
+                            child: const Icon(Icons.person, color: Color(AppConstants.primaryColor)),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  user['full_name']?.toString().isNotEmpty == true ? user['full_name'].toString() : user['email']?.toString() ?? 'Utilisateur',
+                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  '${user['email'] ?? ''}',
+                                  style: const TextStyle(color: Colors.white54, fontSize: 12),
+                                ),
+                              ],
+                            ),
+                          ),
+                          _StatusChip(label: isSuspended ? 'SUSPENDED' : 'ACTIVE'),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        mt5Logins.isEmpty ? 'Aucun login MT5 lié' : 'MT5: ${mt5Logins.join(' • ')}',
+                        style: const TextStyle(color: Colors.white70, fontSize: 12),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          _MetricPill(label: 'Accounts', value: '${user['active_trading_accounts'] ?? 0}'),
+                          const SizedBox(width: 8),
+                          _MetricPill(label: 'VIP', value: '${user['is_vip'] == true ? 1 : 0}'),
+                          const Spacer(),
+                          TextButton(
+                            onPressed: userId.isEmpty
+                                ? null
+                                : () => isSuspended ? onActivate(userId) : onSuspend(userId),
+                            child: Text(isSuspended ? 'Activer' : 'Suspendre'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
       ],
     );
   }

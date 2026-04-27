@@ -12,7 +12,7 @@ class CopyTradingAdminService {
   }
 
   static Future<List<Map<String, dynamic>>> fetchHistory() async {
-    final response = await http.get(Uri.parse('$baseUrl/trade_dispatches'), headers: AdminAuth.headers());
+    final response = await http.get(Uri.parse('$baseUrl/copytrading/history'), headers: AdminAuth.headers());
     if (response.statusCode == 200) {
       final decoded = json.decode(response.body);
       if (decoded is Map && decoded['items'] is List) {

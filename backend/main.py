@@ -284,6 +284,189 @@ def _get_dashboard_payload(user_id: str, access_token: str | None) -> dict[str, 
     }
 
 
+def _parse_iso_datetime(value: Any) -> datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            return parsed.replace(tzinfo=timezone.utc)
+        return parsed
+    except Exception:
+        return None
+
+
+def _count_rows(rows: list[dict[str, Any]], field: str, expected: Any) -> int:
+    return sum(1 for row in rows if row.get(field) == expected)
+
+
+def _sum_numeric_rows(rows: list[dict[str, Any]], field: str) -> float:
+    total = 0.0
+    for row in rows:
+        try:
+            total += float(row.get(field) or 0)
+        except Exception:
+            continue
+    return total
+
+
+@app.get("/admin/dashboard/summary")
+def admin_dashboard_summary(
+    authorization: str | None = Header(default=None),
+    x_admin_key: str | None = Header(default=None),
+) -> dict[str, Any]:
+    if not ADMIN_API_KEY or not x_admin_key or not hmac.compare_digest(x_admin_key, ADMIN_API_KEY):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Cle admin invalide.",
+        )
+    access_token = _extract_bearer_token(authorization)
+
+    profiles = _supabase_rest_get(
+        "profiles",
+        access_token,
+        select="id, email, full_name, role, is_vip, needs_vps, created_at",
+        order="created_at.desc.nullslast",
+        limit=200,
+    )
+    accounts = _supabase_rest_get(
+        "trading_accounts",
+        access_token,
+        select="id, user_id, mt5_login, mt5_server, account_type, balance, equity, is_active, last_sync",
+        order="last_sync.desc.nullslast",
+        limit=300,
+    )
+    payments = _supabase_rest_get(
+        "payments",
+        access_token,
+        select="id, user_id, amount, status, method, proof_url, created_at, transaction_id, entity",
+        order="created_at.desc.nullslast",
+        limit=200,
+    )
+    notifications = _supabase_rest_get(
+        "notifications",
+        access_token,
+        select="id, user_id, title, message, priority, created_at",
+        order="created_at.desc.nullslast",
+        limit=100,
+    )
+    signals = _supabase_rest_get(
+        "signals",
+        access_token,
+        select="id, master_account_id, ticket_id_mt5, symbol, trade_type, volume, status, created_at, closed_at",
+        order="created_at.desc.nullslast",
+        limit=200,
+    )
+    copied_trades = _supabase_rest_get(
+        "copied_trades",
+        access_token,
+        select="id, signal_id, client_account_id, client_ticket_id, volume_executed, execution_status, profit, error_message, created_at, closed_at",
+        order="created_at.desc.nullslast",
+        limit=200,
+    )
+    support_tickets = _supabase_rest_get(
+        "support_tickets",
+        access_token,
+        select="id, user_id, status, created_at",
+        order="created_at.desc.nullslast",
+        limit=100,
+    )
+
+    accounts_by_user: dict[str, list[dict[str, Any]]] = {}
+    for account in accounts:
+        user_id = str(account.get("user_id") or "")
+        if not user_id:
+            continue
+        accounts_by_user.setdefault(user_id, []).append(account)
+
+    user_cards: list[dict[str, Any]] = []
+    for profile in profiles[:8]:
+        user_id = str(profile.get("id") or "")
+        linked_accounts = accounts_by_user.get(user_id, [])
+        active_accounts = [account for account in linked_accounts if account.get("is_active")]
+        user_cards.append(
+            {
+                "id": user_id,
+                "email": profile.get("email"),
+                "full_name": profile.get("full_name"),
+                "role": profile.get("role"),
+                "is_vip": bool(profile.get("is_vip")),
+                "mt5_logins": [account.get("mt5_login") for account in linked_accounts if account.get("mt5_login")],
+                "active_trading_accounts": len(active_accounts),
+                "inactive_trading_accounts": len(linked_accounts) - len(active_accounts),
+                "last_sync": linked_accounts[0].get("last_sync") if linked_accounts else None,
+            }
+        )
+
+    dispatch_counts = storage.monitoring_counts()
+    executed_dispatches = storage.list_dispatches(status_filter="EXECUTED", limit=200)
+    latency_samples_ms: list[float] = []
+    for dispatch in executed_dispatches:
+        dispatched_at = _parse_iso_datetime(dispatch.get("dispatched_at"))
+        executed_at = _parse_iso_datetime(dispatch.get("executed_at"))
+        if dispatched_at is None or executed_at is None:
+            continue
+        latency_ms = (executed_at - dispatched_at).total_seconds() * 1000
+        if latency_ms >= 0:
+            latency_samples_ms.append(latency_ms)
+
+    total_dispatches = sum(int(count) for count in dispatch_counts.values())
+    total_status_dispatches = (
+        dispatch_counts.get("PENDING", 0)
+        + dispatch_counts.get("DISPATCHED", 0)
+        + dispatch_counts.get("EXECUTED", 0)
+        + dispatch_counts.get("FAILED", 0)
+        + dispatch_counts.get("RETRY", 0)
+        + dispatch_counts.get("CANCELLED", 0)
+    )
+    average_latency_ms = round(sum(latency_samples_ms) / len(latency_samples_ms), 0) if latency_samples_ms else None
+
+    return {
+        "users": {
+            "total": len(profiles),
+            "active": sum(1 for profile in profiles if str(profile.get("role") or "").upper() != "SUSPENDED"),
+            "suspended": sum(1 for profile in profiles if str(profile.get("role") or "").upper() == "SUSPENDED"),
+            "vip": sum(1 for profile in profiles if bool(profile.get("is_vip"))),
+            "with_mt5": sum(1 for account in accounts if bool(account.get("mt5_login"))),
+        },
+        "accounts": {
+            "total": len(accounts),
+            "active": sum(1 for account in accounts if bool(account.get("is_active"))),
+            "inactive": sum(1 for account in accounts if not bool(account.get("is_active"))),
+            "master": sum(1 for account in accounts if str(account.get("account_type") or "").upper() == "MASTER"),
+            "client": sum(1 for account in accounts if str(account.get("account_type") or "").upper() == "CLIENT"),
+        },
+        "payments": {
+            "total": len(payments),
+            "pending": _count_rows(payments, "status", "EN_ATTENTE") + _count_rows(payments, "status", "PENDING"),
+            "validated": _count_rows(payments, "status", "VALIDATED") + _count_rows(payments, "status", "VALIDATED"),
+            "refused": _count_rows(payments, "status", "REFUSED") + _count_rows(payments, "status", "REFUSED"),
+            "amount_total": round(_sum_numeric_rows(payments, "amount"), 2),
+        },
+        "copytrading": {
+            "signals_total": len(signals),
+            "copied_total": len(copied_trades),
+            "executed": _count_rows(copied_trades, "execution_status", "EXECUTED"),
+            "failed": _count_rows(copied_trades, "execution_status", "FAILED"),
+            "pending": _count_rows(copied_trades, "execution_status", "PENDING"),
+            "retry": _count_rows(copied_trades, "execution_status", "RETRY"),
+            "average_latency_ms": average_latency_ms,
+            "dispatch_pipeline": dispatch_counts,
+            "dispatch_pipeline_total": total_dispatches,
+            "dispatch_pipeline_total_statuses": total_status_dispatches,
+        },
+        "activity": {
+            "notifications": len(notifications),
+            "support_tickets": len(support_tickets),
+            "open_tickets": _count_rows(support_tickets, "status", "OPEN") + _count_rows(support_tickets, "status", "PENDING"),
+            "signals": len(signals),
+        },
+        "recent_users": user_cards,
+        "recent_copytrades": copied_trades[:8],
+        "recent_payments": payments[:8],
+    }
+
+
 def _verify_ea_api_key(mt5_login: str, provided_api_key: str | None, expected_role: str) -> dict[str, Any]:
     if not provided_api_key:
         raise HTTPException(
