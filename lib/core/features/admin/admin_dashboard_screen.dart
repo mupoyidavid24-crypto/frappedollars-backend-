@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 
 import '../../constants/constants.dart';
 import 'admin_auth.dart';
+import 'admin_users_service.dart';
 import 'error_admin_service.dart';
 import 'copytrading_admin_service.dart';
 import 'logs_admin_service.dart';
@@ -37,6 +38,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       _safeFetch(LogsAdminService.fetchLogs),
       _safeFetch(CopyTradingAdminService.fetchHistory),
       _safeFetch(ErrorAdminService.fetchErrors),
+      _safeFetch(AdminUsersService.fetchUsers),
       _safeFetchMap(_fetchDashboardSummary),
     ]);
 
@@ -46,14 +48,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     final logs = List<Map<String, dynamic>>.from(results[3] as List);
     final copytradingHistory = List<Map<String, dynamic>>.from(results[4] as List);
     final errorsLogs = List<Map<String, dynamic>>.from(results[5] as List);
-    final summary = Map<String, dynamic>.from(results[6] as Map);
+    final adminUsers = List<Map<String, dynamic>>.from(results[6] as List);
+    final summary = Map<String, dynamic>.from(results[7] as Map);
 
     final usersSummary = Map<String, dynamic>.from(summary['users'] as Map? ?? {});
     final accountsSummary = Map<String, dynamic>.from(summary['accounts'] as Map? ?? {});
     final paymentsSummary = Map<String, dynamic>.from(summary['payments'] as Map? ?? {});
     final copytradingSummary = Map<String, dynamic>.from(summary['copytrading'] as Map? ?? {});
     final activitySummary = Map<String, dynamic>.from(summary['activity'] as Map? ?? {});
-    final recentUsers = List<Map<String, dynamic>>.from(summary['recent_users'] as List? ?? const []);
+    final recentUsers = adminUsers;
     final recentCopytrades = List<Map<String, dynamic>>.from(summary['recent_copytrades'] as List? ?? const []);
 
     final pendingPayments = payments.where((item) => _statusOf(item) == 'EN_ATTENTE').length;
@@ -1329,15 +1332,15 @@ class _RecentUsersList extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionTitle(title: 'Utilisateurs MT5'),
+        const _SectionTitle(title: 'Utilisateurs enregistrés'),
         const SizedBox(height: 12),
         if (users.isEmpty)
           const Text(
-            'Aucun utilisateur lié MT5 dans le résumé actuel.',
+            'Aucun utilisateur trouvé dans le dashboard admin.',
             style: TextStyle(color: Colors.white54),
           )
         else
-          ...users.take(4).map(
+          ...users.map(
             (user) {
               final userId = user['id']?.toString() ?? '';
               final mt5Logins = List<String>.from(user['mt5_logins'] as List? ?? const []);
