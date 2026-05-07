@@ -4,20 +4,23 @@ import json
 import hmac
 import os
 import time
+import traceback
 from datetime import datetime, timedelta, timezone
 from typing import Any, Literal
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, Header, HTTPException, Query, status
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 import requests
 
 from backend.admin_routes import router as admin_router
 from backend.ea_generator import router as ea_router
 from backend.config import supabase
+from backend.error_reporting import record_error_log, report_exception
 from backend.storage import SQLiteStorage, hash_api_key, utc_now
 
 
@@ -128,6 +131,20 @@ class DashboardConnectPayload(BaseModel):
     mt5_server: str = Field(min_length=1)
     account_type: Literal["MASTER", "CLIENT"] = "CLIENT"
     is_active: bool = True
+
+
+class ErrorLogPayload(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    source: str = Field(min_length=1)
+    component: str = Field(min_length=1)
+    severity: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "ERROR"
+    message: str = Field(min_length=1)
+    details: dict[str, Any] = Field(default_factory=dict)
+    user_id: str | None = None
+    mt5_login: str | None = None
+    trade_id: str | None = None
+    account_role: Literal["MASTER", "CLIENT"] | None = None
 
 
 def _extract_bearer_token(authorization: str | None) -> str | None:
@@ -308,6 +325,43 @@ def _sum_numeric_rows(rows: list[dict[str, Any]], field: str) -> float:
         except Exception:
             continue
     return total
+
+
+def _persist_error_log(
+    *,
+    source: str,
+    component: str,
+    severity: str,
+    message: str,
+    details: dict[str, Any] | None = None,
+    user_id: str | None = None,
+    mt5_login: str | None = None,
+    trade_id: str | None = None,
+) -> None:
+    record_error_log(
+        source=source,
+        component=component,
+        severity=severity,
+        message=message,
+        details=details,
+        user_id=user_id,
+        mt5_login=mt5_login,
+        trade_id=trade_id,
+    )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    report_exception(
+        component=f"{request.method} {request.url.path}",
+        exc=exc,
+        source="backend",
+        details={
+            "method": request.method,
+            "path": request.url.path,
+        },
+    )
+    return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content={"detail": "Erreur interne du serveur."})
 
 
 @app.get("/admin/dashboard/summary")
@@ -586,6 +640,14 @@ def dashboard_state(user_id: str, authorization: str | None = Header(default=Non
         return _get_dashboard_payload(user_id, _extract_bearer_token(authorization))
     except Exception as exc:
         print(f"[DASHBOARD_STATE] unexpected error for user_id={user_id}: {exc}")
+        _persist_error_log(
+            source="backend",
+            component="dashboard_state",
+            severity="ERROR",
+            message=str(exc),
+            details={"user_id": user_id, "path": "/dashboard/state"},
+            user_id=user_id,
+        )
         return {
             "profile": {
                 "id": user_id,
@@ -600,6 +662,31 @@ def dashboard_state(user_id: str, authorization: str | None = Header(default=Non
             "subscription": None,
             "trades": [],
         }
+
+
+    @app.post("/errors/log")
+    def report_error(payload: ErrorLogPayload, x_admin_key: str | None = Header(default=None), x_api_key: str | None = Header(default=None)) -> dict[str, Any]:
+        authorized = False
+        if x_admin_key and ADMIN_API_KEY and hmac.compare_digest(x_admin_key, ADMIN_API_KEY):
+            authorized = True
+        elif payload.mt5_login and payload.account_role and x_api_key:
+            _verify_ea_api_key(payload.mt5_login, x_api_key, expected_role=payload.account_role)
+            authorized = True
+
+        if not authorized:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Autorisation invalide.")
+
+        _persist_error_log(
+            source=payload.source,
+            component=payload.component,
+            severity=payload.severity,
+            message=payload.message,
+            details=payload.details,
+            user_id=payload.user_id,
+            mt5_login=payload.mt5_login,
+            trade_id=payload.trade_id,
+        )
+        return {"status": "ok"}
 
 
 @app.post("/dashboard/connect_mt5")

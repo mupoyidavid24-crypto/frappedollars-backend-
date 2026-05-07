@@ -28,6 +28,43 @@ struct TrackedTrade
 
 TrackedTrade G_ActiveTrades[];
 
+string JsonSafe(string value)
+{
+   StringReplace(value, "\\", "\\\\");
+   StringReplace(value, "\"", "\\\"");
+   StringReplace(value, "\r", " ");
+   StringReplace(value, "\n", " ");
+   return value;
+}
+
+void ReportErrorToBackend(string component, string message, string severity = "ERROR")
+{
+   if(StringLen(InpApiKey) == 0)
+      return;
+
+   string login = InpLogin;
+   if(login == "")
+      login = IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN));
+
+   string json = "{";
+   json += "\"source\":\"mt5\",";
+   json += "\"component\":\"" + JsonSafe(component) + "\",";
+   json += "\"severity\":\"" + JsonSafe(severity) + "\",";
+   json += "\"message\":\"" + JsonSafe(message) + "\",";
+   json += "\"mt5_login\":\"" + JsonSafe(login) + "\",";
+   json += "\"account_role\":\"MASTER\"";
+   json += "}";
+
+   char data[], result[];
+   string headers = "Content-Type: application/json\r\n";
+   headers += "x-api-key: " + InpApiKey + "\r\n";
+   int jsonLen = StringLen(json);
+   ArrayResize(data, jsonLen);
+   StringToCharArray(json, data, 0, jsonLen, CP_UTF8);
+   string response_headers = "";
+   WebRequest("POST", InpBackendUrl + "/errors/log", headers, 5000, data, result, response_headers);
+}
+
 //+------------------------------------------------------------------+
 //| Expert initialization function                                   |
 //+------------------------------------------------------------------+
@@ -150,7 +187,10 @@ void SendToAPI(ulong ticket, string action, string symbol, string trade_type, do
    if(res==200)
       Print("Trade envoyé: ", json, " body=", response_body);
    else
+   {
       Print("Erreur envoi trade: ", GetLastError(), " http=", res, " body=", response_body);
+      ReportErrorToBackend("master.trade", "Erreur envoi trade http=" + IntegerToString(res) + " last_error=" + IntegerToString(GetLastError()), "ERROR");
+   }
 }
 
 

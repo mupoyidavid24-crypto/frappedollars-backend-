@@ -25,7 +25,10 @@ void ConfirmerExecutionTrade(string backendUrl, string client_login, string trad
    if(res == 200)
       Print("[FLOW] POST /client/trade_executed status=200 trade_id=", trade_id, " ticket=", client_ticket_id, " body=", response_body);
    else
+   {
       Print("[FLOW] POST /client/trade_executed échec status=", res, " trade_id=", trade_id, " ticket=", client_ticket_id, " last_error=", GetLastError(), " body=", response_body);
+      ReportErrorToBackend("client.trade_executed", "Confirmation d'execution en échec trade_id=" + trade_id + " http=" + IntegerToString(res), "ERROR");
+   }
 }
 //+------------------------------------------------------------------+
 //|                                         FrappedDollarsClient.mq5 |
@@ -55,6 +58,39 @@ input bool     InpRunIdentitySelfTest = true;                  // Active le self
 CTrade         G_Trade;
 string         G_ClientId;
 bool           G_PendingTradesFetchInProgress = false;
+string JsonSafe(string value)
+{
+   StringReplace(value, "\\", "\\\\");
+   StringReplace(value, "\"", "\\\"");
+   StringReplace(value, "\r", " ");
+   StringReplace(value, "\n", " ");
+   return value;
+}
+
+void ReportErrorToBackend(string component, string message, string severity = "ERROR")
+{
+   if(StringLen(InpApiKey) == 0)
+      return;
+
+   string login = G_ClientId;
+   string json = "{";
+   json += "\"source\":\"mt5\",";
+   json += "\"component\":\"" + JsonSafe(component) + "\",";
+   json += "\"severity\":\"" + JsonSafe(severity) + "\",";
+   json += "\"message\":\"" + JsonSafe(message) + "\",";
+   json += "\"mt5_login\":\"" + JsonSafe(login) + "\",";
+   json += "\"account_role\":\"CLIENT\"";
+   json += "}";
+
+   char data[], result[];
+   string headers = "Content-Type: application/json\r\n";
+   headers += "x-api-key: " + InpApiKey + "\r\n";
+   int jsonLen = StringLen(json);
+   ArrayResize(data, jsonLen);
+   StringToCharArray(json, data, 0, jsonLen, CP_UTF8);
+   string response_headers = "";
+   WebRequest("POST", InpBackendUrl + "/errors/log", headers, InpRequestTimeoutMs, data, result, response_headers);
+}
 
 #define TAG_LENGTH 13
 #define SYSTEM_PREFIX 410000000
@@ -591,6 +627,7 @@ void FetchAndExecute()
       if(!hasItemsEnvelope && !hasPendingEnvelope)
       {
          Print("[FLOW] ERREUR: format JSON invalide (clé items/pending_trades absente).");
+         ReportErrorToBackend("client.pending_trades", "Format JSON invalide (clé items/pending_trades absente)", "WARNING");
          G_PendingTradesFetchInProgress = false;
          return;
       }
@@ -630,6 +667,7 @@ void FetchAndExecute()
       else if(res == 403)
          Print("[FLOW] AUTH ERROR: /client/pending_trades a répondu 403. Vérifier le rôle de la clé API pour le login ", G_ClientId);
       Print("[FLOW] GET /client/pending_trades échec code=", res, " last_error=", GetLastError());
+      ReportErrorToBackend("client.pending_trades", "GET /client/pending_trades a échoué code=" + IntegerToString(res) + " last_error=" + IntegerToString(GetLastError()), "ERROR");
       G_PendingTradesFetchInProgress = false;
    }
 }
@@ -701,6 +739,7 @@ void ParseAndProcess(string json)
       if(StringLen(copiedTradeId) == 0)
       {
          Print("[FLOW] Fragment ignoré index=", i, " reason=trade_id_vide raw=", item);
+         ReportErrorToBackend("client.parse", "Fragment JSON sans trade_id", "WARNING");
          continue;
       }
 
@@ -730,6 +769,7 @@ void ParseAndProcess(string json)
          if(volume <= 0)
          {
             Print("[FLOW] EXECUTION ABORTED trade_id=", copiedTradeId, " reason=volume_invalid parsed_volume=", DoubleToString(volume, 2));
+            ReportErrorToBackend("client.execute_open", "Volume invalide pour trade_id=" + copiedTradeId, "WARNING");
             continue;
          }
          if(symbol == "" || (type != "BUY" && type != "SELL"))
@@ -740,11 +780,13 @@ void ParseAndProcess(string json)
          if(!SymbolSelect(symbol, true))
          {
             Print("[FLOW] EXECUTION ABORTED trade_id=", copiedTradeId, " reason=symbol_select_failed symbol=", symbol);
+            ReportErrorToBackend("client.execute_open", "SymbolSelect a échoué pour trade_id=" + copiedTradeId + " symbol=" + symbol, "ERROR");
             continue;
          }
          if(!TerminalInfoInteger(TERMINAL_TRADE_ALLOWED) || !MQLInfoInteger(MQL_TRADE_ALLOWED))
          {
             Print("[FLOW] EXECUTION ABORTED trade_id=", copiedTradeId, " reason=trade_not_allowed symbol=", symbol, " terminal_trade_allowed=", TerminalInfoInteger(TERMINAL_TRADE_ALLOWED), " mql_trade_allowed=", MQLInfoInteger(MQL_TRADE_ALLOWED));
+            ReportErrorToBackend("client.execute_open", "Trading non autorisé pour trade_id=" + copiedTradeId + " symbol=" + symbol, "ERROR");
             continue;
          }
          double normalizedVolume = NormalizeTradeVolume(symbol, volume);
@@ -752,6 +794,7 @@ void ParseAndProcess(string json)
          if(normalizedVolume <= 0)
          {
             Print("[FLOW] EXECUTION ABORTED trade_id=", copiedTradeId, " reason=normalized_volume_invalid requested=", DoubleToString(volume, 2));
+            ReportErrorToBackend("client.execute_open", "Volume normalisé invalide pour trade_id=" + copiedTradeId, "WARNING");
             continue;
          }
          Print("[FLOW] Préparation ordre magic=", magicNumber, " comment=", brokerComment);
@@ -791,6 +834,7 @@ void ParseAndProcess(string json)
          {
             G_TradeJournal[G_TradeJournalSize].status = "FAILED";
             Print("[FLOW] EXECUTION FAILED trade_id=", copiedTradeId, " retcode=", G_Trade.ResultRetcode(), " desc=", G_Trade.ResultRetcodeDescription());
+            ReportErrorToBackend("client.execute_open", "Echec d'exécution OPEN trade_id=" + copiedTradeId + " retcode=" + IntegerToString((int)G_Trade.ResultRetcode()), "ERROR");
          }
          G_TradeJournalSize++;
       }
@@ -850,6 +894,7 @@ void ParseAndProcess(string json)
             G_TradeJournal[G_TradeJournalSize].status = "FAILED";
             G_TradeJournalSize++;
             Print("[FLOW] CLOSE échec trade_id=", copiedTradeId, " ticket_id=", ticketId, " position_ticket=", ticketToClose, " reason=position_not_found_or_close_failed");
+            ReportErrorToBackend("client.execute_close", "Echec CLOSE trade_id=" + copiedTradeId + " ticket_id=" + ticketId, "ERROR");
          }
       }
    }

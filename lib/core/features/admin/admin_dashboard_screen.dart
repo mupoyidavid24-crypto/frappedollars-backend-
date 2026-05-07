@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 
 import '../../constants/constants.dart';
 import 'admin_auth.dart';
+import 'error_admin_service.dart';
 import 'copytrading_admin_service.dart';
 import 'logs_admin_service.dart';
 import 'notification_admin_service.dart';
@@ -35,6 +36,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       _safeFetch(VIPAdminService.fetchVIPUsers),
       _safeFetch(LogsAdminService.fetchLogs),
       _safeFetch(CopyTradingAdminService.fetchHistory),
+      _safeFetch(ErrorAdminService.fetchErrors),
       _safeFetchMap(_fetchDashboardSummary),
     ]);
 
@@ -43,7 +45,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     final vipUsers = List<Map<String, dynamic>>.from(results[2] as List);
     final logs = List<Map<String, dynamic>>.from(results[3] as List);
     final copytradingHistory = List<Map<String, dynamic>>.from(results[4] as List);
-    final summary = Map<String, dynamic>.from(results[5] as Map);
+    final errorsLogs = List<Map<String, dynamic>>.from(results[5] as List);
+    final summary = Map<String, dynamic>.from(results[6] as Map);
 
     final usersSummary = Map<String, dynamic>.from(summary['users'] as Map? ?? {});
     final accountsSummary = Map<String, dynamic>.from(summary['accounts'] as Map? ?? {});
@@ -63,6 +66,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       vipUsers: vipUsers,
       logs: logs,
       copytradingHistory: copytradingHistory,
+      errorsLogs: errorsLogs,
       pendingPayments: pendingPayments,
       validatedPayments: validatedPayments,
       refusedPayments: refusedPayments,
@@ -391,6 +395,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               const SizedBox(height: 10),
               _AnalysisRow(label: 'Notifications', value: '${data.notificationsCount}', valueColor: const Color(0xFF9AD7FF)),
               const SizedBox(height: 10),
+              _AnalysisRow(label: 'Erreurs centralisées', value: '${data.errorsLogs.length}', valueColor: const Color(0xFFFF9A9A)),
+              const SizedBox(height: 10),
               _AnalysisRow(
                 label: 'Latence copie',
                 value: data.averageCopyLatencyMs == 0 ? 'n/a' : '${data.averageCopyLatencyMs.toStringAsFixed(0)} ms',
@@ -699,6 +705,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         accent: const Color(0xFFFFD66B),
       ));
     }
+    if (data.errorsLogs.isNotEmpty) {
+      activities.add(_ActivityItem(
+        title: 'Erreurs centralisées',
+        subtitle: '${data.errorsLogs.length} incidents récents',
+        icon: Icons.error_outline,
+        accent: const Color(0xFFFF9A9A),
+      ));
+    }
     if (data.copyFailedTrades > 0) {
       activities.add(_ActivityItem(
         title: 'Échecs copy trading',
@@ -756,6 +770,7 @@ class _AdminDashboardData {
   final List<Map<String, dynamic>> vipUsers;
   final List<Map<String, dynamic>> logs;
   final List<Map<String, dynamic>> copytradingHistory;
+  final List<Map<String, dynamic>> errorsLogs;
   final List<Map<String, dynamic>> recentUsers;
   final List<Map<String, dynamic>> recentCopytrades;
   final Map<String, dynamic> dispatchCounts;
@@ -795,6 +810,7 @@ class _AdminDashboardData {
     required this.vipUsers,
     required this.logs,
     required this.copytradingHistory,
+    required this.errorsLogs,
     required this.recentUsers,
     required this.recentCopytrades,
     required this.dispatchCounts,
@@ -836,6 +852,7 @@ class _AdminDashboardData {
       vipUsers: [],
       logs: [],
       copytradingHistory: [],
+      errorsLogs: [],
       recentUsers: [],
       recentCopytrades: [],
       dispatchCounts: {},

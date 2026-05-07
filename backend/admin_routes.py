@@ -7,6 +7,7 @@ import requests
 from fastapi import APIRouter, Depends, HTTPException
 
 from backend.config import get_current_admin, supabase
+from backend.error_reporting import report_exception
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -61,6 +62,7 @@ def vip_dashboard(admin=Depends(get_current_admin)):
         return vip_users.data or []
     except Exception as exc:
         print(f"Erreur vip/dashboard: {exc}")
+        report_exception("admin_routes.vip_dashboard", exc, source="backend", details={"route": "/admin/vip/dashboard"})
         return []
 
 
@@ -135,6 +137,7 @@ def get_copytrading_history(admin=Depends(get_current_admin)):
         return items
     except Exception as exc:
         print(f"Erreur copytrading/history: {exc}")
+        report_exception("admin_routes.copytrading_history", exc, source="backend", details={"route": "/admin/copytrading/history"})
         return []
 
 
@@ -182,6 +185,7 @@ def list_users(admin=Depends(get_current_admin)):
         return users
     except Exception as exc:
         print(f"Erreur users: {exc}")
+        report_exception("admin_routes.users", exc, source="backend", details={"route": "/admin/users"})
         return []
 
 
@@ -232,6 +236,7 @@ def get_logs(admin=Depends(get_current_admin)):
         return logs.data or []
     except Exception as exc:
         print(f"Erreur logs: {exc}")
+        report_exception("admin_routes.logs", exc, source="backend", details={"route": "/admin/logs"})
         return []
 
 
@@ -243,6 +248,7 @@ def get_support_tickets(admin=Depends(get_current_admin)):
         return res.data or []
     except Exception as exc:
         print(f"Erreur support_tickets: {exc}")
+        report_exception("admin_routes.support_tickets", exc, source="backend", details={"route": "/admin/support_tickets"})
         return []
 
 
@@ -254,6 +260,7 @@ def list_payments(admin=Depends(get_current_admin)):
         return res.data or []
     except Exception as exc:
         print(f"Erreur payments: {exc}")
+        report_exception("admin_routes.payments", exc, source="backend", details={"route": "/admin/payments"})
         return []
 
 
@@ -331,6 +338,7 @@ def list_notifications(admin=Depends(get_current_admin)):
         return res.data or []
     except Exception as exc:
         print(f"Erreur notifications: {exc}")
+        report_exception("admin_routes.notifications", exc, source="backend", details={"route": "/admin/notifications"})
         return []
 
 
@@ -345,3 +353,21 @@ def get_detailed_logs(admin=Depends(get_current_admin)):
         .execute()
     )
     return logs.data
+
+
+@router.get("/errors")
+def list_errors(admin=Depends(get_current_admin)):
+    del admin
+    try:
+        res = (
+            supabase.table("errors_logs")
+            .select("id, source, component, severity, message, details, user_id, mt5_login, trade_id, created_at")
+            .order("created_at", desc=True)
+            .limit(200)
+            .execute()
+        )
+        return res.data or []
+    except Exception as exc:
+        print(f"Erreur errors_logs: {exc}")
+        report_exception("admin_routes.errors", exc, source="backend", details={"route": "/admin/errors"})
+        return []

@@ -3,11 +3,14 @@
 Ce document sert de sauvegarde technique pour la V1.1 de l'application de Copy Trading.
 
 ## 🏗 Architecture
-- **Mobile :** Flutter (Clean Architecture)
-- **Backend :** FastAPI (Python) sur VPS
-- **Base de données :** Supabase (PostgreSQL + Realtime)
+- **Front web / mobile :** Flutter
+- **Hosting front :** Firebase Hosting uniquement
+- **Authentification :** Supabase Auth comme source de vérité
+- **Base de données :** Supabase PostgreSQL + Realtime comme source de vérité
+- **Backend :** FastAPI (Python)
 - **Trading :** Expert Advisors MQL5 (Master & Client)
 - **Paiements :** Flutterwave (Intégré)
+- **Non utilisé :** Firestore pour les données métier
 
 ## 💰 Logique Business (Verrouillée)
 - **Abonnement Trading :** 30$ / semaine.
