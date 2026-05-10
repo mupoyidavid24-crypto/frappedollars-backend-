@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../constants/constants.dart';
 import 'payment_admin_service.dart';
 
@@ -47,7 +48,7 @@ class _AdminPaymentsScreenState extends State<AdminPaymentsScreen> {
       setState(() {
         payments = filterStatus == 'TOUS'
             ? result
-            : result.where((p) => p['status'] == filterStatus).toList();
+            : result.where((p) => _paymentStatusOf(p) == filterStatus).toList();
         loading = false;
       });
     } catch (e) {
@@ -118,9 +119,9 @@ class _AdminPaymentsScreenState extends State<AdminPaymentsScreen> {
                     },
                     itemBuilder: (context) => const [
                       PopupMenuItem(value: 'TOUS', child: Text('Tous')),
-                      PopupMenuItem(value: 'EN_ATTENTE', child: Text('En attente')),
-                      PopupMenuItem(value: 'VALIDATED', child: Text('Validés')),
-                      PopupMenuItem(value: 'REFUSED', child: Text('Refusés')),
+                      PopupMenuItem(value: 'PENDING_VALIDATION', child: Text('En attente')),
+                      PopupMenuItem(value: 'APPROVED', child: Text('Approuvés')),
+                      PopupMenuItem(value: 'REJECTED', child: Text('Rejetés')),
                     ],
                     icon: const Icon(Icons.filter_list, color: Colors.white),
                   ),
@@ -131,9 +132,9 @@ class _AdminPaymentsScreenState extends State<AdminPaymentsScreen> {
                   runSpacing: 12,
                   children: [
                     _StatPill(label: 'Total', value: '${payments.length}'),
-                    _StatPill(label: 'En attente', value: '${payments.where((p) => _statusOf(p) == 'EN_ATTENTE').length}'),
-                    _StatPill(label: 'Validés', value: '${payments.where((p) => _statusOf(p) == 'VALIDATED').length}'),
-                    _StatPill(label: 'Refusés', value: '${payments.where((p) => _statusOf(p) == 'REFUSED').length}'),
+                    _StatPill(label: 'En attente', value: '${payments.where((p) => _paymentStatusOf(p) == 'PENDING_VALIDATION').length}'),
+                    _StatPill(label: 'Approuvés', value: '${payments.where((p) => _paymentStatusOf(p) == 'APPROVED').length}'),
+                    _StatPill(label: 'Rejetés', value: '${payments.where((p) => _paymentStatusOf(p) == 'REJECTED').length}'),
                   ],
                 ),
                 const SizedBox(height: 16),
@@ -194,7 +195,7 @@ class _AdminPaymentsScreenState extends State<AdminPaymentsScreen> {
     );
   }
 
-  String _statusOf(Map<String, dynamic> p) => p['status']?.toString().toUpperCase() ?? '';
+  String _paymentStatusOf(Map<String, dynamic> p) => (p['payment_status'] ?? p['status'])?.toString().toUpperCase() ?? '';
 }
 
 class _HeaderRow extends StatelessWidget {
@@ -263,13 +264,13 @@ class _PaymentCard extends StatelessWidget {
 
   const _PaymentCard({required this.payment, required this.onValidate, required this.onRefuse});
 
-  String get _status => payment['status']?.toString().toUpperCase() ?? '';
+  String get _status => (payment['payment_status'] ?? payment['status'])?.toString().toUpperCase() ?? '';
 
   Color get _statusColor {
     switch (_status) {
-      case 'VALIDATED':
+      case 'APPROVED':
         return const Color(0xFF3EE7B6);
-      case 'REFUSED':
+      case 'REJECTED':
         return const Color(0xFFFF7C7C);
       default:
         return const Color(0xFFFFD66B);
@@ -301,9 +302,9 @@ class _PaymentCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Montant: ${payment['amount']}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                    Text('Montant: ${payment['montant'] ?? payment['amount']}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
                     const SizedBox(height: 4),
-                    Text('Utilisateur: ${payment['user_id']}', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                    Text('Utilisateur: ${payment['client'] ?? payment['user_id']}', style: const TextStyle(color: Colors.white54, fontSize: 12)),
                   ],
                 ),
               ),
@@ -319,19 +320,30 @@ class _PaymentCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          Text('Méthode: ${payment['method']}', style: const TextStyle(color: Colors.white70)),
-          Text('Date: ${payment['created_at']}', style: const TextStyle(color: Colors.white70)),
-          if (payment['proof_url'] != null) ...[
+          Text('Type: ${payment['payment_type'] ?? 'n/a'}', style: const TextStyle(color: Colors.white70)),
+          Text('Moyen: ${payment['moyen'] ?? 'Mobile Money'}', style: const TextStyle(color: Colors.white70)),
+          Text('Numéro utilisé: ${payment['payer_phone'] ?? payment['numero'] ?? 'n/a'}', style: const TextStyle(color: Colors.white70)),
+          Text('Numéro destinataire: ${payment['destination_number'] ?? 'n/a'}', style: const TextStyle(color: Colors.white70)),
+          Text('Date: ${payment['date'] ?? payment['created_at'] ?? 'n/a'}', style: const TextStyle(color: Colors.white70)),
+          if ((payment['proof_url'] ?? payment['preuve']) != null) ...[
             const SizedBox(height: 8),
-            TextButton(onPressed: () {}, child: const Text('Voir preuve')),
+            TextButton(
+              onPressed: () async {
+                final url = Uri.tryParse((payment['proof_url'] ?? payment['preuve']).toString());
+                if (url != null) {
+                  await launchUrl(url, mode: LaunchMode.externalApplication);
+                }
+              },
+              child: const Text('Voir preuve'),
+            ),
           ],
           const SizedBox(height: 8),
-          if (_status == 'EN_ATTENTE')
+          if (_status == 'PENDING_VALIDATION')
             Row(
               children: [
-                ElevatedButton.icon(onPressed: onValidate, icon: const Icon(Icons.check), label: const Text('Valider')),
+                ElevatedButton.icon(onPressed: onValidate, icon: const Icon(Icons.check), label: const Text('APPROVE')),
                 const SizedBox(width: 10),
-                OutlinedButton.icon(onPressed: onRefuse, icon: const Icon(Icons.close), label: const Text('Refuser')),
+                OutlinedButton.icon(onPressed: onRefuse, icon: const Icon(Icons.close), label: const Text('REJECT')),
               ],
             ),
         ],

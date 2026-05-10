@@ -10,11 +10,16 @@ class SupabaseService {
 
   // -- AUTHENTICATION --
 
-  Future<AuthResponse> signUp(String email, String password) async {
+  Future<AuthResponse> signUp(
+    String email,
+    String password, {
+    Map<String, dynamic>? metadata,
+  }) async {
     return await _client.auth.signUp(
       email: email,
       password: password,
       emailRedirectTo: AppConstants.authRedirectUrl,
+      data: metadata,
     );
   }
 
@@ -95,6 +100,18 @@ class SupabaseService {
   }
 
   // -- LEADERBOARD --
+
+  Future<List<Map<String, dynamic>>> getLeaderboardSnapshot() async {
+    final response = await _client
+        .from('profiles')
+        .select('id, email, full_name, total_profit')
+        .order('total_profit', ascending: false)
+        .limit(10);
+
+    return (response as List)
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList();
+  }
 
   Stream<List<Map<String, dynamic>>> getLeaderboardStream() {
     return _client

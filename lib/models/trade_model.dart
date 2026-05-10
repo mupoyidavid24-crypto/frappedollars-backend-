@@ -26,7 +26,7 @@ class Trade {
   factory Trade.fromJson(Map<String, dynamic> json) {
     final signal = json['signals'];
     final signalMap = signal is Map
-        ? Map<String, dynamic>.from(signal as Map)
+        ? Map<String, dynamic>.from(signal)
         : <String, dynamic>{};
     final fallbackSymbol = json['symbol']?.toString() ??
         json['signal_id']?.toString() ??

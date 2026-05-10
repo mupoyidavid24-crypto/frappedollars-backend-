@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
-import '../../core/features/admin/admin_auth.dart';
 import 'admin_login_screen.dart';
 import 'admin_register_screen.dart';
 import '../../core/features/admin/admin_dashboard_screen.dart' as modern_admin;
+import 'package:provider/provider.dart';
+import '../auth/auth_provider.dart';
 
 class AdminEntryScreen extends StatelessWidget {
   const AdminEntryScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    if (AdminAuth.adminKey != null) {
+    final profile = context.watch<AuthProvider>().userProfile;
+    if (profile?.role.name.toUpperCase() == 'ADMIN') {
       return const modern_admin.AdminDashboardScreen();
     }
     return Scaffold(
@@ -45,7 +47,7 @@ class AdminEntryScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 8),
                         const Text(
-                          'Choisis si tu veux te connecter ou créer un nouvel accès administrateur.',
+                          'Connecte-toi avec un compte Supabase ayant le role ADMIN.',
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 28),
@@ -56,7 +58,7 @@ class AdminEntryScreen extends StatelessWidget {
                             );
                           },
                           icon: const Icon(Icons.login),
-                          label: const Text('Se connecter comme admin'),
+                          label: const Text('Ouvrir la connexion Supabase'),
                         ),
                         const SizedBox(height: 12),
                         OutlinedButton.icon(
@@ -66,7 +68,7 @@ class AdminEntryScreen extends StatelessWidget {
                             );
                           },
                           icon: const Icon(Icons.person_add_alt_1),
-                          label: const Text('Créer un accès admin'),
+                          label: const Text('Instructions admin'),
                         ),
                       ],
                     ),

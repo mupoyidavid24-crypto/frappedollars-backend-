@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import '../../core/constants/constants.dart';
 import 'auth_provider.dart';
 
-import '../dashboard/dashboard_screen.dart';
 import 'register_screen.dart';
 
 
@@ -45,10 +44,6 @@ class _LoginScreenState extends State<LoginScreen> {
     if (success) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Connexion réussie !')),
-      );
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => DashboardScreen()),
       );
     } else {
       final errorMsg = authProvider.loginError ?? 'Échec de la connexion. Vérifiez vos identifiants.';

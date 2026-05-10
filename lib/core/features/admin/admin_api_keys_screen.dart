@@ -155,7 +155,7 @@ class _AdminApiKeysScreenState extends State<AdminApiKeysScreen> {
                             ),
                             const SizedBox(height: 14),
                             DropdownButtonFormField<String>(
-                              value: _selectedRole,
+                              initialValue: _selectedRole,
                               dropdownColor: const Color(0xFF101821),
                               decoration: const InputDecoration(labelText: 'Rôle'),
                               items: const [

@@ -5,11 +5,13 @@ import 'package:provider/provider.dart';
 import 'core/constants/constants.dart';
 import 'features/auth/auth_provider.dart';
 import 'features/auth/login_screen.dart';
+import 'features/auth/kyc_screen.dart';
 import 'features/admin/admin_login_screen.dart';
 import 'features/admin/admin_register_screen.dart';
 import 'core/features/admin/admin_api_keys_screen.dart';
 import 'core/features/admin/admin_dashboard_screen.dart' as modern_admin;
 import 'core/features/admin/admin_copytrading_screen.dart';
+import 'core/features/admin/admin_kyc_screen.dart';
 import 'core/features/admin/admin_logs_screen.dart';
 import 'core/features/admin/admin_notifications_screen.dart';
 import 'core/features/admin/admin_payments_screen.dart';
@@ -19,7 +21,7 @@ import 'features/dashboard/main_navigation_screen.dart';
 import 'core/services/notification_service.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
-import 'core/features/admin/admin_auth.dart';
+import 'models/profile_model.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -35,8 +37,6 @@ void main() async {
   } catch (e) {
     debugPrint('Supabase Initialization Error: $e');
   }
-
-  await AdminAuth.loadPersistedKey();
 
   // Initialisation notifications (toutes plateformes)
   await NotificationService().init();
@@ -92,6 +92,7 @@ class MyApp extends StatelessWidget {
         '/admin/notifications': (context) => const AdminNotificationsScreen(),
         '/admin/vip': (context) => const AdminVIPScreen(),
         '/admin/copytrading': (context) => const AdminCopyTradingScreen(),
+        '/admin/kyc': (context) => const AdminKycScreen(),
         '/admin/logs': (context) => const AdminLogsScreen(),
       },
     );
@@ -137,6 +138,12 @@ class _AuthWrapperState extends State<AuthWrapper> {
     }
 
     if (authProvider.userProfile != null) {
+      if (authProvider.userProfile!.role.name.toUpperCase() == 'ADMIN') {
+        return const modern_admin.AdminDashboardScreen();
+      }
+      if (authProvider.userProfile!.kycStatus != KycStatus.approved) {
+        return const KycScreen();
+      }
       return const MainNavigationScreen();
     } else {
       return const LoginScreen();

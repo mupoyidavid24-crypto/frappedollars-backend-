@@ -128,7 +128,7 @@ class _AdminVIPScreenState extends State<AdminVIPScreen> {
                                       ],
                                     ),
                                     trailing: Switch(
-                                      activeColor: const Color(AppConstants.primaryColor),
+                                      activeThumbColor: const Color(AppConstants.primaryColor),
                                       value: u['is_vip'] ?? false,
                                       onChanged: (val) => toggleVIP(u['id'], val),
                                     ),

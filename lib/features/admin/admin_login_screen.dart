@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
-import '../../core/features/admin/admin_auth.dart';
 import 'admin_register_screen.dart';
+import 'package:provider/provider.dart';
+import '../auth/auth_provider.dart';
+import '../../core/features/admin/admin_dashboard_screen.dart' as modern_admin;
 
 class AdminLoginScreen extends StatefulWidget {
   const AdminLoginScreen({super.key});
@@ -10,7 +12,7 @@ class AdminLoginScreen extends StatefulWidget {
 }
 
 class _AdminLoginScreenState extends State<AdminLoginScreen> {
-  final _usernameController = TextEditingController();
+  final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
   bool _isLoading = false;
@@ -18,18 +20,18 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
 
   @override
   void dispose() {
-    _usernameController.dispose();
+    _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
   Future<void> _handleAdminLogin() async {
-    final username = _usernameController.text.trim();
+    final email = _emailController.text.trim();
     final password = _passwordController.text;
 
-    if (username.isEmpty || password.isEmpty) {
+    if (email.isEmpty || password.isEmpty) {
       setState(() {
-        _errorMessage = 'Saisis le nom d’utilisateur et le mot de passe.';
+        _errorMessage = 'Saisis l\'email et le mot de passe.';
       });
       return;
     }
@@ -40,9 +42,15 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
     });
 
     try {
-      await AdminAuth.loginAdminAccount(username: username, password: password);
+      final authProvider = context.read<AuthProvider>();
+      final ok = await authProvider.login(email, password);
+      if (!ok || authProvider.userProfile == null || authProvider.userProfile!.role.name.toUpperCase() != 'ADMIN') {
+        throw Exception('Acces admin refuse. Utilise un compte Supabase avec le role ADMIN.');
+      }
       if (!mounted) return;
-      Navigator.of(context).pushReplacementNamed('/admin/dashboard');
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const modern_admin.AdminDashboardScreen()),
+      );
     } catch (e) {
       setState(() {
         _errorMessage = e.toString().replaceFirst('Exception: ', '');
@@ -97,10 +105,10 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                         ),
                         const SizedBox(height: 28),
                         TextField(
-                          controller: _usernameController,
+                          controller: _emailController,
                           textInputAction: TextInputAction.next,
                           decoration: const InputDecoration(
-                            labelText: 'Nom d’utilisateur',
+                            labelText: 'Email Supabase',
                             prefixIcon: Icon(Icons.person),
                           ),
                         ),

@@ -25,7 +25,7 @@ class PaymentAdminService {
   static Future<bool> validatePayment(String paymentId) async {
     try {
       final response = await http.post(
-        Uri.parse('$baseUrl/payments/validate/$paymentId'),
+        Uri.parse('$baseUrl/payments/approve/$paymentId'),
         headers: AdminAuth.headers(),
       );
       if (response.statusCode == 200) return true;
@@ -40,7 +40,7 @@ class PaymentAdminService {
   static Future<bool> refusePayment(String paymentId, String motif) async {
     try {
       final response = await http.post(
-        Uri.parse('$baseUrl/payments/refuse/$paymentId'),
+        Uri.parse('$baseUrl/payments/reject/$paymentId'),
         body: json.encode({'motif': motif}),
         headers: AdminAuth.headers(jsonContent: true),
       );

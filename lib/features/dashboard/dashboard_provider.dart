@@ -163,6 +163,18 @@ class DashboardProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
+      final profileResponse = await Supabase.instance.client
+          .from('profiles')
+          .select('kyc_status, kyc_blocked')
+          .eq('id', userId)
+          .maybeSingle();
+      final profile = profileResponse;
+      final kycStatus = (profile?['kyc_status']?.toString() ?? 'PENDING').toUpperCase();
+      final kycBlocked = profile?['kyc_blocked'] ?? true;
+      if (kycStatus != 'APPROVED' || kycBlocked == true) {
+        throw Exception('KYC_REQUIRED');
+      }
+
       final accessToken = Supabase.instance.client.auth.currentSession?.accessToken;
       final response = await http.post(
         Uri.parse('${AppConstants.backendBaseUrl}/dashboard/connect_mt5'),

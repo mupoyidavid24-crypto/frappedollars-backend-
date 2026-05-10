@@ -125,7 +125,7 @@ class _AdminCopyTradingScreenState extends State<AdminCopyTradingScreen> {
                       ),
                       const SizedBox(height: 12),
                       SwitchListTile(
-                        activeColor: const Color(AppConstants.primaryColor),
+                        activeThumbColor: const Color(AppConstants.primaryColor),
                         title: const Text('Statut Copy Trading', style: TextStyle(color: Colors.white)),
                         subtitle: Text(isActive ? 'Pipeline actif' : 'Pipeline désactivé', style: const TextStyle(color: Colors.white54)),
                         value: isActive,

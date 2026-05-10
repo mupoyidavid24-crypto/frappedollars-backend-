@@ -28,6 +28,10 @@ CREATE TABLE IF NOT EXISTS profiles (
     id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
     email TEXT UNIQUE NOT NULL,
     full_name TEXT,
+    phone_number TEXT,
+    date_of_birth DATE,
+    kyc_status TEXT NOT NULL DEFAULT 'PENDING',
+    kyc_blocked BOOLEAN NOT NULL DEFAULT TRUE,
     role user_role DEFAULT 'CLIENT',
     is_vip BOOLEAN DEFAULT FALSE,
     needs_vps BOOLEAN DEFAULT FALSE,
@@ -37,6 +41,23 @@ CREATE TABLE IF NOT EXISTS profiles (
     total_profit DECIMAL(15, 2) DEFAULT 0,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS kyc_documents (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+    document_type TEXT NOT NULL CHECK (document_type IN ('NATIONAL_ID', 'VOTER_ID', 'PASSPORT')),
+    document_number TEXT,
+    address_line TEXT NOT NULL,
+    country TEXT NOT NULL,
+    city TEXT NOT NULL,
+    file_url TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED')),
+    reason TEXT DEFAULT '',
+    reviewer_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
+    reviewer_note TEXT,
+    submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    reviewed_at TIMESTAMPTZ
 );
 -- Table definition cleaned up for PostgreSQL
 
@@ -122,16 +143,26 @@ CREATE TABLE IF NOT EXISTS learning_content (
 
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_profiles_email ON profiles(email);
+CREATE INDEX IF NOT EXISTS idx_profiles_kyc_status ON profiles(kyc_status);
 CREATE INDEX IF NOT EXISTS idx_trading_accounts_user_id ON trading_accounts(user_id);
 -- 8. PAYMENTS (gestion des paiements locaux)
 CREATE TABLE IF NOT EXISTS payments (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     client uuid REFERENCES profiles(id),
+    payment_type text NOT NULL DEFAULT 'COPY_TRADING_WEEKLY',
+    payment_status text NOT NULL DEFAULT 'PENDING_VALIDATION',
+    amount numeric(12,2),
     montant numeric(12,2) NOT NULL,
-    moyen varchar(20) NOT NULL CHECK (moyen IN ('Airtel Money', 'Orange Money')),
+    moyen varchar(50) NOT NULL DEFAULT 'Mobile Money',
     numero varchar(20) NOT NULL,
-    preuve text, -- URL Supabase Storage
-    statut varchar(20) NOT NULL CHECK (statut IN ('En attente', 'Validé', 'Refusé')) DEFAULT 'En attente',
+    recipient_number varchar(20),
+    preuve text,
+    proof_url text,
+    reviewer_id uuid REFERENCES profiles(id) ON DELETE SET NULL,
+    reviewed_at timestamptz,
+    review_reason text,
+    statut varchar(20) NOT NULL DEFAULT 'En attente',
+    created_at timestamptz NOT NULL DEFAULT now(),
     date timestamptz NOT NULL DEFAULT now(),
     motif text
 );
@@ -162,6 +193,9 @@ CREATE TABLE IF NOT EXISTS ea_api_keys (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_ea_api_keys_mt5_login ON ea_api_keys(mt5_login);
+
+CREATE INDEX IF NOT EXISTS idx_kyc_documents_user_id ON kyc_documents(user_id);
+CREATE INDEX IF NOT EXISTS idx_kyc_documents_status ON kyc_documents(status);
 
 DO $$ BEGIN
     CREATE TYPE trade_dispatch_status AS ENUM ('PENDING', 'DISPATCHED', 'EXECUTED', 'FAILED', 'RETRY', 'CANCELLED');
@@ -209,6 +243,11 @@ CREATE TRIGGER trg_profiles_updated_at
     BEFORE UPDATE ON profiles
     FOR EACH ROW EXECUTE FUNCTION set_updated_at_timestamp();
 
+DROP TRIGGER IF EXISTS trg_kyc_documents_updated_at ON kyc_documents;
+CREATE TRIGGER trg_kyc_documents_updated_at
+    BEFORE UPDATE ON kyc_documents
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at_timestamp();
+
 DROP TRIGGER IF EXISTS trg_trade_dispatches_updated_at ON trade_dispatches;
 CREATE TRIGGER trg_trade_dispatches_updated_at
     BEFORE UPDATE ON trade_dispatches
@@ -254,6 +293,7 @@ ALTER TABLE support_tickets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE learning_content ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ea_api_keys ENABLE ROW LEVEL SECURITY;
 ALTER TABLE trade_dispatches ENABLE ROW LEVEL SECURITY;
+ALTER TABLE kyc_documents ENABLE ROW LEVEL SECURITY;
 
 -- Helper used by admin read policies without recursive RLS checks
 CREATE OR REPLACE FUNCTION public.is_admin_user()
@@ -278,6 +318,13 @@ DROP POLICY IF EXISTS "Admins can view all profiles" ON profiles;
 CREATE POLICY "Admins can view all profiles" ON profiles FOR SELECT USING (public.is_admin_user());
 DROP POLICY IF EXISTS "Users can update own profile" ON profiles;
 CREATE POLICY "Users can update own profile" ON profiles FOR UPDATE USING (auth.uid() = id);
+
+DROP POLICY IF EXISTS "Users can view own KYC documents" ON kyc_documents;
+CREATE POLICY "Users can view own KYC documents" ON kyc_documents FOR SELECT USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can insert own KYC documents" ON kyc_documents;
+CREATE POLICY "Users can insert own KYC documents" ON kyc_documents FOR INSERT WITH CHECK (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Admins can manage all KYC documents" ON kyc_documents;
+CREATE POLICY "Admins can manage all KYC documents" ON kyc_documents FOR ALL USING (public.is_admin_user());
 
 -- Trading Accounts: View own
 DROP POLICY IF EXISTS "Users can view own accounts" ON trading_accounts;
@@ -324,6 +371,21 @@ USING (
             AND client_acc.master_account_id = signals.master_account_id
     )
 );
+
+CREATE OR REPLACE FUNCTION public.can_copy_trade(p_user_id UUID)
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+    SELECT EXISTS (
+        SELECT 1
+        FROM public.profiles p
+        WHERE p.id = p_user_id
+          AND COALESCE(p.kyc_status, 'PENDING') = 'APPROVED'
+          AND COALESCE(p.kyc_blocked, TRUE) = FALSE
+    );
+$$;
 
 -- Auth Trigger
 CREATE OR REPLACE FUNCTION public.handle_new_user()

@@ -42,7 +42,7 @@ class AuthProvider extends ChangeNotifier {
         return true;
       } else {
         _loginError = "Identifiants invalides ou connexion échouée.";
-        debugPrint("Login Error: ${_loginError}");
+        debugPrint("Login Error: $_loginError");
       }
     } catch (e) {
       _loginError = e.toString();
@@ -54,11 +54,25 @@ class AuthProvider extends ChangeNotifier {
     return false;
   }
 
-  Future<bool> register(String email, String password) async {
+  Future<bool> register({
+    required String email,
+    required String password,
+    required String fullName,
+    required String phoneNumber,
+    required DateTime dateOfBirth,
+  }) async {
     _setLoading(true);
     _registerMessage = null;
     try {
-      final response = await _supabaseService.signUp(email, password);
+      final response = await _supabaseService.signUp(
+        email,
+        password,
+        metadata: {
+          'full_name': fullName,
+          'phone_number': phoneNumber,
+          'date_of_birth': dateOfBirth.toIso8601String().split('T').first,
+        },
+      );
       _registerMessage = response.user == null
           ? "Compte créé. Vérifiez votre email pour activer le compte."
           : "Compte créé. Vérifiez votre email pour activer le compte.";
@@ -71,6 +85,20 @@ class AuthProvider extends ChangeNotifier {
       _setLoading(false);
     }
     return false;
+  }
+
+  Future<void> refreshProfile() async {
+    final user = _supabaseService.currentUser;
+    if (user == null) {
+      return;
+    }
+
+    try {
+      _userProfile = await _supabaseService.getUserProfile(user.id);
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Refresh profile error: $e');
+    }
   }
 
   Future<void> signOut() async {

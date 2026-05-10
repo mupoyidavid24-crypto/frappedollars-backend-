@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../core/features/admin/admin_auth.dart';
 
 class AdminRegisterScreen extends StatefulWidget {
   const AdminRegisterScreen({super.key});
@@ -9,57 +8,12 @@ class AdminRegisterScreen extends StatefulWidget {
 }
 
 class _AdminRegisterScreenState extends State<AdminRegisterScreen> {
-  final _usernameController = TextEditingController();
-  final _passwordController = TextEditingController();
-  final _inviteCodeController = TextEditingController();
-  bool _obscurePassword = true;
-  bool _isLoading = false;
-  String? _errorMessage;
+  final _messageController = TextEditingController(text: 'Les inscriptions admin legacy sont desactivees.');
 
   @override
   void dispose() {
-    _usernameController.dispose();
-    _passwordController.dispose();
-    _inviteCodeController.dispose();
+    _messageController.dispose();
     super.dispose();
-  }
-
-  Future<void> _handleRegister() async {
-    final username = _usernameController.text.trim();
-    final password = _passwordController.text;
-    final inviteCode = _inviteCodeController.text.trim();
-
-    if (username.isEmpty || password.isEmpty || inviteCode.isEmpty) {
-      setState(() {
-        _errorMessage = 'Remplis tous les champs.';
-      });
-      return;
-    }
-
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
-
-    try {
-      await AdminAuth.registerAdminAccount(
-        username: username,
-        password: password,
-        inviteCode: inviteCode,
-      );
-      if (!mounted) return;
-      Navigator.of(context).pushReplacementNamed('/admin/dashboard');
-    } catch (e) {
-      setState(() {
-        _errorMessage = e.toString().replaceFirst('Exception: ', '');
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
   }
 
   @override
@@ -91,72 +45,28 @@ class _AdminRegisterScreenState extends State<AdminRegisterScreen> {
                         const Icon(Icons.admin_panel_settings, size: 72, color: Colors.blueGrey),
                         const SizedBox(height: 20),
                         const Text(
-                          'Créer un accès admin',
+                          'Accès admin Supabase',
                           textAlign: TextAlign.center,
                           style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 8),
                         const Text(
-                          'Un code d\'invitation est requis pour créer le compte administrateur.',
+                          'Crée le compte dans Supabase, attribue le role ADMIN en base, puis connecte-toi avec l\'écran principal.',
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 28),
                         TextField(
-                          controller: _usernameController,
-                          textInputAction: TextInputAction.next,
+                          controller: _messageController,
+                          readOnly: true,
                           decoration: const InputDecoration(
-                            labelText: 'Nom d’utilisateur admin',
-                            prefixIcon: Icon(Icons.person),
+                            labelText: 'Statut',
+                            prefixIcon: Icon(Icons.lock),
                           ),
-                        ),
-                        const SizedBox(height: 16),
-                        TextField(
-                          controller: _passwordController,
-                          obscureText: _obscurePassword,
-                          decoration: InputDecoration(
-                            labelText: 'Mot de passe',
-                            prefixIcon: const Icon(Icons.lock_outline),
-                            suffixIcon: IconButton(
-                              icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
-                              onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        TextField(
-                          controller: _inviteCodeController,
-                          decoration: const InputDecoration(
-                            labelText: 'Code d’invitation',
-                            hintText: 'Requis pour activer le compte admin',
-                            prefixIcon: Icon(Icons.key),
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        if (_errorMessage != null) ...[
-                          Text(
-                            _errorMessage!,
-                            style: const TextStyle(color: Colors.redAccent),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 16),
-                        ],
-                        ElevatedButton(
-                          onPressed: _isLoading ? null : _handleRegister,
-                          style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                          ),
-                          child: _isLoading
-                              ? const SizedBox(
-                                  height: 20,
-                                  width: 20,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
-                                )
-                              : const Text('Créer le compte admin'),
                         ),
                         const SizedBox(height: 12),
                         TextButton(
                           onPressed: () => Navigator.of(context).pop(),
-                          child: const Text('Retour à la connexion'),
+                          child: const Text('Retour'),
                         ),
                       ],
                     ),

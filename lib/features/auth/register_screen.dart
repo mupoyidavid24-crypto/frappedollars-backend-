@@ -11,32 +11,110 @@ class RegisterScreen extends StatefulWidget {
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
+  final _fullNameController = TextEditingController();
+  final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
-  final bool _obscurePassword = true;
+  bool _obscurePassword = true;
+  DateTime? _dateOfBirth;
+  bool _isSubmitting = false;
+
+  static const int _minimumAge = 18;
 
   @override
   void dispose() {
+    _fullNameController.dispose();
+    _phoneController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
   }
 
-  void _handleRegister() async {
-    if (_passwordController.text != _confirmPasswordController.text) {
+  bool _isAdult(DateTime dateOfBirth) {
+    final today = DateTime.now();
+    final age = today.year - dateOfBirth.year -
+        ((today.month < dateOfBirth.month ||
+                (today.month == dateOfBirth.month && today.day < dateOfBirth.day))
+            ? 1
+            : 0);
+    return age >= _minimumAge;
+  }
+
+  String _formatDate(DateTime date) {
+    final year = date.year.toString().padLeft(4, '0');
+    final month = date.month.toString().padLeft(2, '0');
+    final day = date.day.toString().padLeft(2, '0');
+    return '$year-$month-$day';
+  }
+
+  Future<void> _pickDateOfBirth() async {
+    final now = DateTime.now();
+    final lastAllowedDate = DateTime(now.year - _minimumAge, now.month, now.day);
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: lastAllowedDate,
+      firstDate: DateTime(1940),
+      lastDate: lastAllowedDate,
+    );
+
+    if (picked != null) {
+      setState(() => _dateOfBirth = picked);
+    }
+  }
+
+  Future<void> _handleRegister() async {
+    if (_isSubmitting) {
+      return;
+    }
+
+    final fullName = _fullNameController.text.trim();
+    final phoneNumber = _phoneController.text.trim();
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+    final confirmPassword = _confirmPasswordController.text.trim();
+
+    if (fullName.isEmpty || phoneNumber.isEmpty || email.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Veuillez remplir tous les champs obligatoires.')),
+      );
+      return;
+    }
+
+    if (_dateOfBirth == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Veuillez sélectionner votre date de naissance.')),
+      );
+      return;
+    }
+
+    if (!_isAdult(_dateOfBirth!)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Vous devez avoir au moins 18 ans pour vous inscrire.')),
+      );
+      return;
+    }
+
+    if (password != confirmPassword) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Les mots de passe ne correspondent pas.')),
       );
       return;
     }
 
+    setState(() => _isSubmitting = true);
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final success = await authProvider.register(
-      _emailController.text.trim(),
-      _passwordController.text.trim(),
+      email: email,
+      password: password,
+      fullName: fullName,
+      phoneNumber: phoneNumber,
+      dateOfBirth: _dateOfBirth!,
     );
+    if (mounted) {
+      setState(() => _isSubmitting = false);
+    }
 
     if (!mounted) return;
 
@@ -59,7 +137,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isLoading = context.watch<AuthProvider>().isLoading;
+    final isLoading = context.watch<AuthProvider>().isLoading || _isSubmitting;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Créer un compte')),
@@ -87,17 +165,41 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
                 const SizedBox(height: 24),
                 const Text(
-                  'Rejoignez FrappedDollars',
+                  'Inscription professionnelle en 2 phases',
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Accédez au copy trading automatique en quelques secondes.',
+                  'Phase 1: identité de base et vérification d\'âge. Phase 2: KYC obligatoire avant le copy trading.',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: Colors.white70),
                 ),
                 const SizedBox(height: 32),
+                TextField(
+                  controller: _fullNameController,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: InputDecoration(
+                    labelText: 'Nom complet',
+                    prefixIcon: const Icon(Icons.badge_outlined),
+                    filled: true,
+                    fillColor: Colors.white,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _phoneController,
+                  keyboardType: TextInputType.phone,
+                  decoration: InputDecoration(
+                    labelText: 'Téléphone',
+                    prefixIcon: const Icon(Icons.phone_outlined),
+                    filled: true,
+                    fillColor: Colors.white,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+                const SizedBox(height: 16),
                 TextField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
@@ -107,6 +209,25 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     filled: true,
                     fillColor: Colors.white,
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                InkWell(
+                  onTap: _pickDateOfBirth,
+                  child: InputDecorator(
+                    decoration: InputDecoration(
+                      labelText: 'Date de naissance',
+                      prefixIcon: const Icon(Icons.cake_outlined),
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: Text(
+                      _dateOfBirth == null ? 'Sélectionner votre date de naissance' : _formatDate(_dateOfBirth!),
+                      style: TextStyle(
+                        color: _dateOfBirth == null ? Colors.black54 : Colors.black87,
+                      ),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -134,6 +255,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                 ),
                 const SizedBox(height: 32),
+                Text(
+                  'Vous devez avoir au moins $_minimumAge ans. Le KYC sera exigé avant tout accès au copy trading.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.white.withOpacity(0.75), fontSize: 12),
+                ),
+                const SizedBox(height: 16),
                 ElevatedButton(
                   onPressed: isLoading ? null : _handleRegister,
                   style: ElevatedButton.styleFrom(

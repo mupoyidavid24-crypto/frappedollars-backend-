@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/constants/constants.dart';
+import '../auth/kyc_screen.dart';
 import 'dashboard_screen.dart';
 
 class SetupScreen extends StatefulWidget {
@@ -17,6 +18,23 @@ class _SetupScreenState extends State<SetupScreen> {
     setState(() => _isLoading = true);
     try {
       final userId = Supabase.instance.client.auth.currentUser!.id;
+      final profileResponse = await Supabase.instance.client
+          .from('profiles')
+          .select('kyc_status, kyc_blocked')
+          .eq('id', userId)
+          .maybeSingle();
+      final profile = profileResponse;
+      final kycStatus = (profile?['kyc_status']?.toString() ?? 'PENDING').toUpperCase();
+      final kycBlocked = profile?['kyc_blocked'] ?? true;
+      if (kycStatus != 'APPROVED' || kycBlocked == true) {
+        if (!mounted) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const KycScreen()),
+        );
+        return;
+      }
+
       await Supabase.instance.client
           .from('profiles')
           .update({'needs_vps': needsVps})
@@ -25,7 +43,7 @@ class _SetupScreenState extends State<SetupScreen> {
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => DashboardScreen()),
+        MaterialPageRoute(builder: (context) => const DashboardScreen()),
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(

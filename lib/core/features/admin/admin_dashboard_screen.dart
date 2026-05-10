@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../constants/constants.dart';
 import 'admin_auth.dart';
@@ -515,6 +516,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         onTap: () => Navigator.pushNamed(context, '/admin/copytrading'),
       ),
       _QuickActionCard(
+        icon: Icons.verified_user_outlined,
+        title: 'KYC',
+        subtitle: 'Documents, âge et validation',
+        onTap: () => Navigator.pushNamed(context, '/admin/kyc'),
+      ),
+      _QuickActionCard(
         icon: Icons.list_alt,
         title: 'Logs',
         subtitle: 'Journal des accès',
@@ -580,7 +587,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           const SizedBox(height: 8),
                           const _InfoRow(label: 'Admin API', value: AppConstants.adminBaseUrl),
                           const SizedBox(height: 8),
-                          _InfoRow(label: 'Admin connecté', value: AdminAuth.adminUsername ?? 'non connecté'),
+                          _InfoRow(
+                            label: 'Admin connecté',
+                            value: Supabase.instance.client.auth.currentUser?.email ?? 'non connecté',
+                          ),
                         ],
                       ),
                     ),
@@ -902,6 +912,7 @@ class _AdminSidebar extends StatelessWidget {
       _SidebarItemData(icon: Icons.payment, label: 'Paiements', onTap: () => Navigator.pushNamed(context, '/admin/payments')),
       _SidebarItemData(icon: Icons.notifications, label: 'Notifications', onTap: () => Navigator.pushNamed(context, '/admin/notifications')),
       _SidebarItemData(icon: Icons.star, label: 'Gestion VIP', onTap: () => Navigator.pushNamed(context, '/admin/vip')),
+      _SidebarItemData(icon: Icons.verified_user_outlined, label: 'KYC', onTap: () => Navigator.pushNamed(context, '/admin/kyc')),
       _SidebarItemData(icon: Icons.sync_alt, label: 'Copy Trading', onTap: () => Navigator.pushNamed(context, '/admin/copytrading')),
       _SidebarItemData(icon: Icons.key, label: 'Clés API', onTap: () => Navigator.pushNamed(context, '/admin/api-keys')),
       _SidebarItemData(icon: Icons.list_alt, label: 'Logs', onTap: () => Navigator.pushNamed(context, '/admin/logs')),
@@ -1145,7 +1156,7 @@ class _AdminTopBar extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    AdminAuth.adminUsername ?? 'Admin',
+                    Supabase.instance.client.auth.currentUser?.email ?? 'Admin',
                     style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
                   ),
                   Text(
@@ -1381,6 +1392,11 @@ class _RecentUsersList extends StatelessWidget {
                                 const SizedBox(height: 2),
                                 Text(
                                   '${user['email'] ?? ''}',
+                                  style: const TextStyle(color: Colors.white54, fontSize: 12),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'KYC: ${user['kyc_status'] ?? 'PENDING'}',
                                   style: const TextStyle(color: Colors.white54, fontSize: 12),
                                 ),
                               ],
