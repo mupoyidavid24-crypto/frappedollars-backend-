@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'admin_register_screen.dart';
 import 'package:provider/provider.dart';
 import '../auth/auth_provider.dart';
 import '../../core/features/admin/admin_dashboard_screen.dart' as modern_admin;
@@ -152,13 +151,10 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                               : const Text('Se connecter'),
                         ),
                         const SizedBox(height: 12),
-                        TextButton(
-                          onPressed: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(builder: (_) => const AdminRegisterScreen()),
-                            );
-                          },
-                          child: const Text('Créer un accès admin'),
+                        const Text(
+                          'Le formulaire de création admin legacy a été supprimé.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.white54, fontSize: 12),
                         ),
                       ],
                     ),

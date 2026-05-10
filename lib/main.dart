@@ -7,7 +7,6 @@ import 'features/auth/auth_provider.dart';
 import 'features/auth/login_screen.dart';
 import 'features/auth/kyc_screen.dart';
 import 'features/admin/admin_login_screen.dart';
-import 'features/admin/admin_register_screen.dart';
 import 'core/features/admin/admin_api_keys_screen.dart';
 import 'core/features/admin/admin_dashboard_screen.dart' as modern_admin;
 import 'core/features/admin/admin_copytrading_screen.dart';
@@ -84,7 +83,6 @@ class MyApp extends StatelessWidget {
         '/': (context) => const AuthWrapper(),
         '/admin': (context) => const modern_admin.AdminDashboardScreen(),
         '/admin/login': (context) => const AdminLoginScreen(),
-        '/admin/register': (context) => const AdminRegisterScreen(),
         '/admin/dashboard': (context) =>
             const modern_admin.AdminDashboardScreen(),
         '/admin/api-keys': (context) => const AdminApiKeysScreen(),

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'admin_login_screen.dart';
-import 'admin_register_screen.dart';
 import '../../core/features/admin/admin_dashboard_screen.dart' as modern_admin;
 import 'package:provider/provider.dart';
 import '../auth/auth_provider.dart';
@@ -61,14 +60,10 @@ class AdminEntryScreen extends StatelessWidget {
                           label: const Text('Ouvrir la connexion Supabase'),
                         ),
                         const SizedBox(height: 12),
-                        OutlinedButton.icon(
-                          onPressed: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(builder: (_) => const AdminRegisterScreen()),
-                            );
-                          },
-                          icon: const Icon(Icons.person_add_alt_1),
-                          label: const Text('Instructions admin'),
+                        const Text(
+                          'La création admin legacy a été supprimée.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.white54, fontSize: 12),
                         ),
                       ],
                     ),

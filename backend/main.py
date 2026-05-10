@@ -104,14 +104,6 @@ class AdminLoginPayload(BaseModel):
     password: str = Field(min_length=1)
 
 
-class AdminRegisterPayload(BaseModel):
-    model_config = ConfigDict(str_strip_whitespace=True)
-
-    username: str = Field(min_length=1)
-    password: str = Field(min_length=1)
-    invite_code: str = Field(min_length=1)
-
-
 class ManualPaymentRequestPayload(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
@@ -734,14 +726,6 @@ def admin_login(payload: AdminLoginPayload) -> dict[str, str]:
     raise HTTPException(
         status_code=status.HTTP_410_GONE,
         detail="Connexion admin legacy desactivee. Utilisez la connexion Supabase avec un compte role ADMIN.",
-    )
-
-
-@app.post("/admin/register")
-def admin_register(payload: AdminRegisterPayload) -> dict[str, str]:
-    raise HTTPException(
-        status_code=status.HTTP_410_GONE,
-        detail="Creation admin legacy desactivee. Creez le compte dans Supabase puis attribuez le role ADMIN en base.",
     )
 
 
