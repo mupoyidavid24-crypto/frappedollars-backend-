@@ -19,7 +19,7 @@ import requests
 
 from backend.admin_routes import router as admin_router
 from backend.ea_generator import router as ea_router
-from backend.config import supabase
+from backend.config import supabase, get_current_admin, _supabase_user_from_jwt
 from backend.error_reporting import record_error_log, report_exception
 from backend.storage import SQLiteStorage, hash_api_key, utc_now
 
@@ -27,9 +27,8 @@ from backend.storage import SQLiteStorage, hash_api_key, utc_now
 BASE_DIR = os.path.dirname(__file__)
 load_dotenv(os.path.join(BASE_DIR, ".env"))
 
-ADMIN_API_KEY = os.getenv("ADMIN_API_KEY") or "a23112857d84806ef3201f526ea2558a"
 SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_ANON_KEY = os.getenv("SUPABASE_KEY")
+SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY") or os.getenv("SUPABASE_KEY")
 SQLITE_DB_PATH = os.getenv(
     "SQLITE_DB_PATH",
     os.path.join(BASE_DIR, "runtime", "pipeline.db"),
@@ -113,14 +112,15 @@ class AdminRegisterPayload(BaseModel):
     invite_code: str = Field(min_length=1)
 
 
-class PaymentVerifyPayload(BaseModel):
+class ManualPaymentRequestPayload(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
     user_id: str = Field(min_length=1)
-    transaction_id: str = Field(min_length=1)
     payment_type: Literal["COPY_TRADING_WEEKLY", "VPS_MONTHLY"]
     amount: float = Field(gt=0)
-    currency: str = Field(default="USD")
+    payer_phone: str = Field(min_length=1)
+    destination_number: str = Field(min_length=1)
+    proof_url: str = Field(min_length=1)
 
 
 class DashboardConnectPayload(BaseModel):
@@ -367,13 +367,8 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
 @app.get("/admin/dashboard/summary")
 def admin_dashboard_summary(
     authorization: str | None = Header(default=None),
-    x_admin_key: str | None = Header(default=None),
 ) -> dict[str, Any]:
-    if not ADMIN_API_KEY or not x_admin_key or not hmac.compare_digest(x_admin_key, ADMIN_API_KEY):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Cle admin invalide.",
-        )
+    get_current_admin(authorization=authorization)
     access_token = _extract_bearer_token(authorization)
 
     profiles = _supabase_rest_get(
@@ -393,7 +388,7 @@ def admin_dashboard_summary(
     payments = _supabase_rest_get(
         "payments",
         access_token,
-        select="id, user_id, amount, status, method, proof_url, created_at, transaction_id, entity",
+        select="id, client, payment_type, payment_status, amount, montant, moyen, numero, payer_phone, destination_number, proof_url, preuve, statut, date, created_at, motif, review_reason",
         order="created_at.desc.nullslast",
         limit=200,
     )
@@ -492,9 +487,9 @@ def admin_dashboard_summary(
         },
         "payments": {
             "total": len(payments),
-            "pending": _count_rows(payments, "status", "EN_ATTENTE") + _count_rows(payments, "status", "PENDING"),
-            "validated": _count_rows(payments, "status", "VALIDATED") + _count_rows(payments, "status", "VALIDATED"),
-            "refused": _count_rows(payments, "status", "REFUSED") + _count_rows(payments, "status", "REFUSED"),
+            "pending": _count_rows(payments, "payment_status", "PENDING_VALIDATION") + _count_rows(payments, "statut", "En attente"),
+            "validated": _count_rows(payments, "payment_status", "APPROVED") + _count_rows(payments, "statut", "Validé"),
+            "refused": _count_rows(payments, "payment_status", "REJECTED") + _count_rows(payments, "statut", "Refusé"),
             "amount_total": round(_sum_numeric_rows(payments, "amount"), 2),
         },
         "copytrading": {
@@ -554,62 +549,11 @@ def _verify_ea_api_key(mt5_login: str, provided_api_key: str | None, expected_ro
 
 
 def _require_admin_key(x_admin_key: str | None = Header(default=None)) -> str:
-    if not ADMIN_API_KEY:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="ADMIN_API_KEY n'est pas configuree sur le backend.",
-        )
-    if not x_admin_key or not hmac.compare_digest(x_admin_key, ADMIN_API_KEY):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Cle admin invalide.",
-        )
-    return x_admin_key
-
-
-def _flutterwave_verify_transaction(transaction_id: str) -> dict[str, Any]:
-    secret_key = os.getenv("FLUTTERWAVE_SECRET_KEY")
-    base_url = os.getenv("FLUTTERWAVE_BASE_URL", "https://api.flutterwave.com/v3")
-    if not secret_key:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="FLUTTERWAVE_SECRET_KEY n'est pas configuree sur le backend.",
-        )
-
-    request = Request(
-        f"{base_url.rstrip('/')}/transactions/{transaction_id}/verify",
-        headers={"Authorization": f"Bearer {secret_key}"},
-        method="GET",
+    del x_admin_key
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="La cle admin partagee est desactivee. Utilisez un compte Supabase avec le role ADMIN.",
     )
-
-    try:
-        with urlopen(request, timeout=30) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-    except HTTPError as exc:
-        body = exc.read().decode("utf-8", errors="replace") if exc.fp else str(exc)
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Flutterwave verification failed: {body}",
-        ) from exc
-    except URLError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Flutterwave verification unreachable: {exc.reason}",
-        ) from exc
-
-    if payload.get("status") != "success":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Transaction Flutterwave invalide ou non verifiee.",
-        )
-
-    data = payload.get("data") or {}
-    if data.get("status") not in {"successful", "success"}:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Transaction Flutterwave non reussie.",
-        )
-    return data
 
 
 def _subscription_payment_window_open() -> bool:
@@ -634,8 +578,43 @@ def _activate_subscription_from_payment(user_id: str, payment_type: str, transac
     return result.data
 
 
+@app.post("/payments/manual_request")
+def manual_payment_request(payload: ManualPaymentRequestPayload, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    auth_user = _supabase_user_from_jwt(_extract_bearer_token(authorization) or "")
+    if str(auth_user.get("id") or "") != payload.user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Demande de paiement refusee.")
+
+    profile_response = supabase.table("profiles").select("id").eq("id", payload.user_id).maybe_single().execute()
+    if not profile_response.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Utilisateur introuvable.")
+
+    inserted = supabase.table("payments").insert(
+        {
+            "client": payload.user_id,
+            "amount": payload.amount,
+            "montant": payload.amount,
+            "moyen": "Mobile Money",
+            "numero": payload.payer_phone,
+            "payer_phone": payload.payer_phone,
+            "destination_number": payload.destination_number,
+            "proof_url": payload.proof_url,
+            "preuve": payload.proof_url,
+            "payment_type": payload.payment_type,
+            "payment_status": "PENDING_VALIDATION",
+            "statut": "En attente",
+            "date": datetime.now(timezone.utc).isoformat(),
+        }
+    ).execute()
+
+    return {"status": "PENDING_VALIDATION", "payment": inserted.data[0] if inserted.data else None}
+
+
 @app.get("/dashboard/state/{user_id}")
 def dashboard_state(user_id: str, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    if authorization:
+        auth_user = _supabase_user_from_jwt(_extract_bearer_token(authorization) or "")
+        if str(auth_user.get("id") or "") != user_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acces au tableau de bord refuse.")
     try:
         return _get_dashboard_payload(user_id, _extract_bearer_token(authorization))
     except Exception as exc:
@@ -664,34 +643,43 @@ def dashboard_state(user_id: str, authorization: str | None = Header(default=Non
         }
 
 
-    @app.post("/errors/log")
-    def report_error(payload: ErrorLogPayload, x_admin_key: str | None = Header(default=None), x_api_key: str | None = Header(default=None)) -> dict[str, Any]:
-        authorized = False
-        if x_admin_key and ADMIN_API_KEY and hmac.compare_digest(x_admin_key, ADMIN_API_KEY):
-            authorized = True
-        elif payload.mt5_login and payload.account_role and x_api_key:
-            _verify_ea_api_key(payload.mt5_login, x_api_key, expected_role=payload.account_role)
-            authorized = True
 
-        if not authorized:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Autorisation invalide.")
 
-        _persist_error_log(
-            source=payload.source,
-            component=payload.component,
-            severity=payload.severity,
-            message=payload.message,
-            details=payload.details,
-            user_id=payload.user_id,
-            mt5_login=payload.mt5_login,
-            trade_id=payload.trade_id,
-        )
-        return {"status": "ok"}
+@app.post("/errors/log")
+def report_error(payload: ErrorLogPayload, x_api_key: str | None = Header(default=None), authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    authorized = False
+    if authorization:
+        try:
+            get_current_admin(authorization=authorization)
+            authorized = True
+        except HTTPException:
+            authorized = False
+    elif payload.mt5_login and payload.account_role and x_api_key:
+        _verify_ea_api_key(payload.mt5_login, x_api_key, expected_role=payload.account_role)
+        authorized = True
+
+    if not authorized:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Autorisation invalide.")
+
+    _persist_error_log(
+        source=payload.source,
+        component=payload.component,
+        severity=payload.severity,
+        message=payload.message,
+        details=payload.details,
+        user_id=payload.user_id,
+        mt5_login=payload.mt5_login,
+        trade_id=payload.trade_id,
+    )
+    return {"status": "ok"}
 
 
 @app.post("/dashboard/connect_mt5")
 def dashboard_connect_mt5(payload: DashboardConnectPayload, authorization: str | None = Header(default=None)) -> dict[str, Any]:
     access_token = _extract_bearer_token(authorization)
+    auth_user = _supabase_user_from_jwt(access_token or "")
+    if str(auth_user.get("id") or "") != payload.user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Connexion MT5 refusee.")
     existing_rows = _supabase_rest_get(
         "trading_accounts",
         access_token,
@@ -728,6 +716,9 @@ def dashboard_connect_mt5(payload: DashboardConnectPayload, authorization: str |
 @app.post("/dashboard/disconnect_mt5/{user_id}")
 def dashboard_disconnect_mt5(user_id: str, authorization: str | None = Header(default=None)) -> dict[str, Any]:
     access_token = _extract_bearer_token(authorization)
+    auth_user = _supabase_user_from_jwt(access_token or "")
+    if str(auth_user.get("id") or "") != user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Deconnexion MT5 refusee.")
     result = _supabase_rest_mutate(
         "PATCH",
         "trading_accounts",
@@ -740,44 +731,18 @@ def dashboard_disconnect_mt5(user_id: str, authorization: str | None = Header(de
 
 @app.post("/admin/login")
 def admin_login(payload: AdminLoginPayload) -> dict[str, str]:
-    admin_username = os.getenv("ADMIN_USERNAME", "admin")
-    admin_password = os.getenv("ADMIN_PASSWORD", "MotDePasseComplexe123!")
-    if storage.verify_admin_credentials(payload.username, payload.password):
-        print(f"[ADMIN_LOGIN] success username={payload.username} source=sqlite")
-        return {
-            "status": "ok",
-            "admin_key": ADMIN_API_KEY,
-            "username": payload.username,
-        }
-    if payload.username != admin_username or payload.password != admin_password:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Identifiants admin invalides.",
-        )
-    print(f"[ADMIN_LOGIN] success username={payload.username}")
-    return {
-        "status": "ok",
-        "admin_key": ADMIN_API_KEY,
-        "username": payload.username,
-    }
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="Connexion admin legacy desactivee. Utilisez la connexion Supabase avec un compte role ADMIN.",
+    )
 
 
 @app.post("/admin/register")
 def admin_register(payload: AdminRegisterPayload) -> dict[str, str]:
-    invite_code = os.getenv("ADMIN_INVITE_CODE", "CreateAdmin2026")
-    if payload.invite_code != invite_code:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Code d'invitation invalide.",
-        )
-
-    storage.upsert_admin_account(payload.username, payload.password)
-    print(f"[ADMIN_REGISTER] success username={payload.username}")
-    return {
-        "status": "ok",
-        "admin_key": ADMIN_API_KEY,
-        "username": payload.username,
-    }
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="Creation admin legacy desactivee. Creez le compte dans Supabase puis attribuez le role ADMIN en base.",
+    )
 
 
 @app.get("/")
@@ -923,67 +888,12 @@ def trade_failed(
 @app.post("/admin/generate_api_key")
 def generate_api_key(
     payload: GenerateApiKeyPayload,
-    admin_key: str = Depends(_require_admin_key),
+    admin=Depends(get_current_admin),
 ) -> dict[str, str]:
-    del admin_key
+    del admin
     result = storage.issue_api_key(payload.mt5_login, payload.account_role)
     print(f"[API_KEY] issued mt5_login={payload.mt5_login} role={payload.account_role}")
     return result
-
-
-@app.post("/payments/verify")
-def verify_payment(payload: PaymentVerifyPayload) -> dict[str, Any]:
-    if not _subscription_payment_window_open():
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Les depots d'abonnement sont autorises uniquement le samedi et le dimanche.",
-        )
-
-    profile_response = (
-        supabase.table("profiles").select("id, email").eq("id", payload.user_id).maybe_single().execute()
-    )
-    profile = profile_response.data
-    if not profile:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Utilisateur introuvable.")
-
-    transaction = _flutterwave_verify_transaction(payload.transaction_id)
-    currency = str(transaction.get("currency") or "").upper()
-    transaction_amount = float(transaction.get("amount") or transaction.get("charged_amount") or 0)
-    customer = transaction.get("customer") or {}
-    customer_email = str(customer.get("email") or "").lower()
-    profile_email = str(profile.get("email") or "").lower()
-
-    if payload.currency.upper() != currency:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Devise Flutterwave inattendue.",
-        )
-    if abs(transaction_amount - payload.amount) > 0.01:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Montant Flutterwave inattendu.",
-        )
-    if customer_email and profile_email and customer_email != profile_email:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Le client Flutterwave ne correspond pas au compte utilisateur.",
-        )
-
-    subscription_rows = _activate_subscription_from_payment(
-        user_id=payload.user_id,
-        payment_type=payload.payment_type,
-        transaction_id=payload.transaction_id,
-    )
-
-    print(
-        f"[PAYMENT_VERIFY] success user_id={payload.user_id} transaction_id={payload.transaction_id} type={payload.payment_type}"
-    )
-    return {
-        "status": "ok",
-        "transaction_id": payload.transaction_id,
-        "verified_transaction": transaction,
-        "subscription": subscription_rows[0] if subscription_rows else None,
-    }
 
 
 @app.get("/admin/trade_dispatches")
@@ -991,9 +901,9 @@ def list_trade_dispatches(
     client_login: str | None = Query(default=None),
     status_filter: str | None = Query(default=None, alias="status"),
     limit: int = Query(default=100, ge=1, le=500),
-    admin_key: str = Depends(_require_admin_key),
+    admin=Depends(get_current_admin),
 ) -> dict[str, list[dict[str, Any]]]:
-    del admin_key
+    del admin
     return {
         "items": storage.list_dispatches(
             client_login=client_login,
