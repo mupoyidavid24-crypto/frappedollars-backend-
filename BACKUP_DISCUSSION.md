@@ -9,9 +9,9 @@ Le projet est techniquement fini. Il reste uniquement à résoudre le problème 
 - **Lancement :** `uvicorn main:app --reload` depuis le dossier `/backend`
 
 ## 💰 Logique Business
-- **Abonnement Trading :** 30$ / semaine.
-- **Abonnement VPS :** 35$ / mois.
-- **Limite Profit :** 204$ / semaine.
+- **Abonnement Trading :** 50$ / semaine.
+- **Abonnement VPS :** 30$ / mois.
+- **Limite Profit :** limite technique de protection: la copie s'arrête automatiquement lorsque le profit hebdomadaire atteint 120 USD.
 - **Capital Mini :** 30$.
 - **Calcul Lot :** Proportionnel au capital Client/Master.
 

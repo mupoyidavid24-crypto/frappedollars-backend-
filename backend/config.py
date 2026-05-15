@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import os
 from typing import Any
 
+from decimal import Decimal
 import requests
 from dotenv import load_dotenv
 from fastapi import Header, HTTPException, status
@@ -80,13 +82,153 @@ def get_current_admin(authorization: str | None = Header(default=None)):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Acces admin refuse.",
-        )
-    return profile_row
+BUSINESS_RULE_DEFAULTS: dict[str, object] = {
+MIN_CAPITAL_REQUIRED = 30.0
+    "copy_trading_weekly_price": 50.0,
+    "vps_monthly_price": 30.0,
+    "weekly_profit_limit": 120.0,
+    "copy_trading_weekly_price": PRICES["COPY_TRADING_WEEKLY"],
+    "vps_monthly_price": PRICES["VPS_MONTHLY"],
+    "weekly_profit_limit": WEEKLY_PROFIT_LIMIT,
+    "weekly_profit_limit_nature": "technical_limit",
+    "minimum_capital_required": 30.0,
+        "Limite technique de protection: la copie s'arrete automatiquement lorsque le profit hebdomadaire atteint 120 USD."
+    ),
 
 PRICES = {
-    "COPY_TRADING_WEEKLY": 50.0,
-    "VPS_MONTHLY": 35.0,
+    "COPY_TRADING_WEEKLY": float(BUSINESS_RULE_DEFAULTS["copy_trading_weekly_price"]),
+    "VPS_MONTHLY": float(BUSINESS_RULE_DEFAULTS["vps_monthly_price"]),
 }
 
-WEEKLY_PROFIT_LIMIT = 250.0
-MIN_CAPITAL_REQUIRED = 30.0
+WEEKLY_PROFIT_LIMIT = float(BUSINESS_RULE_DEFAULTS["weekly_profit_limit"])
+MIN_CAPITAL_REQUIRED = float(BUSINESS_RULE_DEFAULTS["minimum_capital_required"])
+
+BUSINESS_RULES = dict(BUSINESS_RULE_DEFAULTS)
+
+
+def _coerce_float(value: Any, fallback: float) -> float:
+    if isinstance(value, bool):
+        return fallback
+    if isinstance(value, (int, float, Decimal)):
+        return float(value)
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return fallback
+
+
+def _coerce_weekdays(value: Any) -> list[int]:
+    if isinstance(value, list):
+        weekdays: list[int] = []
+        for item in value:
+            try:
+                weekday = int(item)
+            except (TypeError, ValueError):
+                continue
+            if 1 <= weekday <= 7:
+                weekdays.append(weekday)
+        return weekdays or [5, 6]
+    return [5, 6]
+
+
+def _merge_business_rules(row: dict[str, Any] | None) -> dict[str, object]:
+    merged = dict(BUSINESS_RULE_DEFAULTS)
+    if not row:
+        return merged
+
+    merged["currency"] = str(row.get("currency") or merged["currency"])
+    merged["copy_trading_weekly_price"] = _coerce_float(
+        row.get("copy_trading_weekly_price"),
+        float(merged["copy_trading_weekly_price"]),
+    )
+    merged["vps_monthly_price"] = _coerce_float(row.get("vps_monthly_price"), float(merged["vps_monthly_price"]))
+    merged["weekly_profit_limit"] = _coerce_float(row.get("weekly_profit_limit"), float(merged["weekly_profit_limit"]))
+    merged["weekly_profit_limit_nature"] = str(row.get("weekly_profit_limit_nature") or merged["weekly_profit_limit_nature"])
+    merged["weekly_profit_limit_description"] = str(
+        row.get("weekly_profit_limit_description") or merged["weekly_profit_limit_description"]
+    )
+    merged["minimum_capital_required"] = _coerce_float(
+        row.get("minimum_capital_required"),
+        float(merged["minimum_capital_required"]),
+    )
+    merged["subscription_payment_window_weekdays"] = _coerce_weekdays(row.get("subscription_payment_window_weekdays"))
+    return merged
+
+
+def _business_rules_payload_from_updates(payload: dict[str, Any]) -> dict[str, object]:
+    return {
+        "currency": str(payload.get("currency") or BUSINESS_RULE_DEFAULTS["currency"]),
+        "copy_trading_weekly_price": _coerce_float(
+            payload.get("copy_trading_weekly_price"),
+            float(BUSINESS_RULE_DEFAULTS["copy_trading_weekly_price"]),
+        ),
+        "vps_monthly_price": _coerce_float(
+            payload.get("vps_monthly_price"),
+            float(BUSINESS_RULE_DEFAULTS["vps_monthly_price"]),
+        ),
+        "weekly_profit_limit": _coerce_float(
+            payload.get("weekly_profit_limit"),
+            float(BUSINESS_RULE_DEFAULTS["weekly_profit_limit"]),
+        ),
+        "weekly_profit_limit_nature": str(
+            payload.get("weekly_profit_limit_nature") or BUSINESS_RULE_DEFAULTS["weekly_profit_limit_nature"]
+        ),
+        "weekly_profit_limit_description": str(
+            payload.get("weekly_profit_limit_description") or BUSINESS_RULE_DEFAULTS["weekly_profit_limit_description"]
+        ),
+        "minimum_capital_required": _coerce_float(
+            payload.get("minimum_capital_required"),
+            float(BUSINESS_RULE_DEFAULTS["minimum_capital_required"]),
+        ),
+        "subscription_payment_window_weekdays": _coerce_weekdays(payload.get("subscription_payment_window_weekdays")),
+    }
+
+
+def get_business_rules_payload() -> dict[str, object]:
+    try:
+        response = (
+            supabase.table("business_rules")
+            .select(
+                "id, currency, copy_trading_weekly_price, vps_monthly_price, weekly_profit_limit, weekly_profit_limit_nature, weekly_profit_limit_description, minimum_capital_required, subscription_payment_window_weekdays, updated_at",
+            )
+            .order("updated_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        row = (response.data or [{}])[0]
+        return _merge_business_rules(row if isinstance(row, dict) else None)
+    except Exception:
+        return dict(BUSINESS_RULE_DEFAULTS)
+
+
+def upsert_business_rules_payload(payload: dict[str, Any], updated_by: str | None = None) -> dict[str, object]:
+    normalized = _business_rules_payload_from_updates(payload)
+    if updated_by:
+        normalized["updated_by"] = updated_by
+    normalized["updated_at"] = datetime.now(timezone.utc).isoformat()
+
+    try:
+        existing = (
+            supabase.table("business_rules")
+            .select("id")
+            .order("updated_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        existing_row = (existing.data or [{}])[0]
+        existing_id = existing_row.get("id") if isinstance(existing_row, dict) else None
+        if existing_id:
+            result = supabase.table("business_rules").update(normalized).eq("id", existing_id).execute()
+        else:
+            result = supabase.table("business_rules").insert(normalized).execute()
+        row = (result.data or [normalized])[0]
+        return _merge_business_rules(row if isinstance(row, dict) else normalized)
+    except Exception:
+        return _merge_business_rules(normalized)
+    "minimum_capital_required": MIN_CAPITAL_REQUIRED,
+    "subscription_payment_window_weekdays": [5, 6],
+}
+
+
+def get_business_rules_payload() -> dict[str, object]:
+    return dict(BUSINESS_RULES)

@@ -19,7 +19,7 @@ import requests
 
 from backend.admin_routes import router as admin_router
 from backend.ea_generator import router as ea_router
-from backend.config import supabase, get_current_admin, _supabase_user_from_jwt
+from backend.config import supabase, get_current_admin, _supabase_user_from_jwt, get_business_rules_payload
 from backend.error_reporting import record_error_log, report_exception
 from backend.storage import SQLiteStorage, hash_api_key, utc_now
 
@@ -290,6 +290,7 @@ def _get_dashboard_payload(user_id: str, access_token: str | None) -> dict[str, 
         "account": account,
         "subscription": subscription,
         "trades": trades,
+        "business_rules": get_business_rules_payload(),
     }
 
 
@@ -632,6 +633,7 @@ def dashboard_state(user_id: str, authorization: str | None = Header(default=Non
             "account": None,
             "subscription": None,
             "trades": [],
+            "business_rules": get_business_rules_payload(),
         }
 
 
@@ -737,6 +739,11 @@ def root() -> dict[str, str]:
 @app.get("/ping")
 def ping() -> dict[str, str]:
     return {"ping": "pong"}
+
+
+@app.get("/business/rules")
+def business_rules() -> dict[str, Any]:
+    return get_business_rules_payload()
 
 
 @app.get("/monitoring")

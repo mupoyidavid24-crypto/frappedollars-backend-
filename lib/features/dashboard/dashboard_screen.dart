@@ -8,6 +8,7 @@ import '../../models/trading_account_model.dart';
 import '../../models/subscription_model.dart';
 import '../../models/trade_model.dart';
 import '../../models/profile_model.dart';
+import '../../models/business_rules_model.dart';
 import '../auth/auth_provider.dart';
 import '../auth/kyc_screen.dart';
 import '../subscription/payment_service.dart';
@@ -26,11 +27,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final _passwordController = TextEditingController();
   final PaymentService _paymentService = PaymentService();
   bool _dataLoaded = false;
-
-  bool get _isSubscriptionPaymentWindowOpen {
-    final currentDay = DateTime.now().weekday;
-    return currentDay == DateTime.saturday || currentDay == DateTime.sunday;
-  }
 
   @override
   void dispose() {
@@ -114,6 +110,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final userId = authProvider.userProfile!.id;
     final profile = authProvider.userProfile!;
     final dashboardProvider = context.watch<DashboardProvider>();
+    final businessRules = dashboardProvider.businessRules;
+    final isPaymentWindowOpen = businessRules?.isSubscriptionPaymentWindowOpen(DateTime.now()) ?? false;
     final isKycApproved = profile.kycStatus == KycStatus.approved;
 
     return Scaffold(
@@ -138,7 +136,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
             const SizedBox(height: 16),
             _buildReferralCard(profile.referralCode),
             const SizedBox(height: 16),
-            _buildStatusCard(dashboardProvider.subscription, profile.needsVps, profile.kycStatus),
+            _buildStatusCard(
+              dashboardProvider.subscription,
+              profile.needsVps,
+              profile.kycStatus,
+              businessRules,
+              isPaymentWindowOpen,
+            ),
             const SizedBox(height: 24),
             if (!isKycApproved) _buildKycPrompt(context),
             if (!isKycApproved) const SizedBox(height: 24),
@@ -305,9 +309,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildStatusCard(Subscription? sub, bool needsVps, KycStatus kycStatus) {
+  Widget _buildStatusCard(
+    Subscription? sub,
+    bool needsVps,
+    KycStatus kycStatus,
+    BusinessRules? businessRules,
+    bool isPaymentWindowOpen,
+  ) {
     final isActive = sub?.status.name == 'active' || sub?.status.name == 'manual_active';
     final kycApproved = kycStatus == KycStatus.approved;
+    final copyTradingPrice = businessRules?.copyTradingWeeklyPrice.toStringAsFixed(0) ?? '--';
+    final vpsPrice = businessRules?.vpsMonthlyPrice.toStringAsFixed(0) ?? '--';
+    final profitLimitLabel =
+      businessRules?.weeklyProfitLimitLabel ??
+      'Limite technique de protection: la copie s\'arrete automatiquement lorsque le profit hebdomadaire atteint 120 USD.';
     
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -327,9 +342,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ? 'KYC requis avant activation'
                     : isActive
                         ? 'Actif'
-                        : (sub?.status.name == 'weekly_limit_reached' ? 'Limite 250\$ atteinte' : 'Inactif ou expiré'),
+                        : (sub?.status.name == 'weekly_limit_reached' ? profitLimitLabel : 'Inactif ou expiré'),
               ),
             ),
+            if (businessRules != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8.0),
+                child: Text(
+                  profitLimitLabel,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.white70, fontSize: 12),
+                ),
+              ),
             if (!kycApproved)
               const Padding(
                 padding: EdgeInsets.only(top: 8.0),
@@ -343,10 +367,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Padding(
                 padding: const EdgeInsets.only(top: 8.0),
                 child: ElevatedButton(
-                  onPressed: _isSubscriptionPaymentWindowOpen
+                  onPressed: businessRules != null && isPaymentWindowOpen
                       ? () => _paymentService.handlePayment(
                             context: context,
-                            amount: 50.0,
+                            amount: businessRules.copyTradingWeeklyPrice,
                             type: "COPY_TRADING_WEEKLY",
                           )
                       : null,
@@ -356,9 +380,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     minimumSize: const Size(double.infinity, 45),
                   ),
                   child: Text(
-                    _isSubscriptionPaymentWindowOpen
-                        ? 'PAYER L\'ABONNEMENT TRADING (50\$)'
-                        : 'Paiement disponible samedi et dimanche',
+                    businessRules == null
+                        ? 'Chargement des paramètres...'
+                        : isPaymentWindowOpen
+                            ? 'PAYER L\'ABONNEMENT TRADING ($copyTradingPrice\$)'
+                            : 'Paiement disponible ${businessRules.subscriptionPaymentWindowDescription}',
                   ),
                 ),
               ),
@@ -366,10 +392,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                Padding(
                 padding: const EdgeInsets.only(top: 8.0),
                 child: ElevatedButton(
-                  onPressed: _isSubscriptionPaymentWindowOpen
+                  onPressed: businessRules != null && isPaymentWindowOpen
                       ? () => _paymentService.handlePayment(
                             context: context,
-                            amount: 35.0,
+                            amount: businessRules.vpsMonthlyPrice,
                             type: "VPS_MONTHLY",
                           )
                       : null,
@@ -379,9 +405,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     minimumSize: const Size(double.infinity, 45),
                   ),
                   child: Text(
-                    _isSubscriptionPaymentWindowOpen
-                        ? 'PAYER L\'HÉBERGEMENT VPS (35\$)'
-                        : 'Paiement disponible samedi et dimanche',
+                    businessRules == null
+                        ? 'Chargement des paramètres...'
+                        : isPaymentWindowOpen
+                            ? 'PAYER L\'HÉBERGEMENT VPS ($vpsPrice\$)'
+                            : 'Paiement disponible ${businessRules.subscriptionPaymentWindowDescription}',
                   ),
                 ),
               ),

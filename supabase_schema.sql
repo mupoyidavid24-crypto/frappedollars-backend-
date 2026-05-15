@@ -145,6 +145,53 @@ CREATE TABLE IF NOT EXISTS learning_content (
 CREATE INDEX IF NOT EXISTS idx_profiles_email ON profiles(email);
 CREATE INDEX IF NOT EXISTS idx_profiles_kyc_status ON profiles(kyc_status);
 CREATE INDEX IF NOT EXISTS idx_trading_accounts_user_id ON trading_accounts(user_id);
+
+-- 8. BUSINESS RULES (configuration commerciale editable)
+CREATE TABLE IF NOT EXISTS business_rules (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    currency TEXT NOT NULL DEFAULT 'USD',
+    copy_trading_weekly_price NUMERIC(12, 2) NOT NULL DEFAULT 50,
+    vps_monthly_price NUMERIC(12, 2) NOT NULL DEFAULT 30,
+    weekly_profit_limit NUMERIC(12, 2) NOT NULL DEFAULT 120,
+    weekly_profit_limit_nature TEXT NOT NULL DEFAULT 'technical_limit',
+    weekly_profit_limit_description TEXT NOT NULL DEFAULT 'Limite technique de protection: la copie s'arrete automatiquement lorsque le profit hebdomadaire atteint 120 USD.',
+    minimum_capital_required NUMERIC(12, 2) NOT NULL DEFAULT 30,
+    subscription_payment_window_weekdays JSONB NOT NULL DEFAULT '[5, 6]'::jsonb,
+    updated_by UUID REFERENCES profiles(id) ON DELETE SET NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_business_rules_updated_at ON business_rules(updated_at DESC);
+
+-- 9. PAYMENT METHODS
+CREATE TABLE IF NOT EXISTS payment_methods (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    provider TEXT NOT NULL,
+    label TEXT NOT NULL,
+    account_name TEXT,
+    account_number TEXT,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_payment_methods_is_active ON payment_methods(is_active);
+
+-- 10. VPS ASSIGNMENTS / OPERATIONS
+CREATE TABLE IF NOT EXISTS vps_assignments (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id UUID REFERENCES profiles(id) ON DELETE CASCADE UNIQUE,
+    status TEXT NOT NULL DEFAULT 'DISCONNECTED' CHECK (status IN ('DISCONNECTED', 'CONNECTED', 'RESTART_REQUESTED', 'ERROR')),
+    provider TEXT,
+    host_label TEXT,
+    notes TEXT,
+    last_heartbeat TIMESTAMPTZ,
+    last_restart_requested_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_vps_assignments_status ON vps_assignments(status);
+CREATE INDEX IF NOT EXISTS idx_vps_assignments_updated_at ON vps_assignments(updated_at DESC);
+
 -- 8. PAYMENTS (gestion des paiements locaux)
 CREATE TABLE IF NOT EXISTS payments (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

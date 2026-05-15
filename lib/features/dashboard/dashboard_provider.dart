@@ -9,6 +9,7 @@ import '../../core/constants/constants.dart';
 import '../../models/trading_account_model.dart';
 import '../../models/subscription_model.dart';
 import '../../models/trade_model.dart';
+import '../../models/business_rules_model.dart';
 import '../../core/services/ea_download_helper.dart';
 import 'package:flutter/services.dart' show rootBundle;
 
@@ -21,11 +22,13 @@ class DashboardProvider extends ChangeNotifier {
   
   TradingAccount? _account;
   Subscription? _subscription;
+  BusinessRules? _businessRules;
   List<Trade> _trades = [];
   bool _isLoading = false;
 
   TradingAccount? get account => _account;
   Subscription? get subscription => _subscription;
+  BusinessRules? get businessRules => _businessRules;
   List<Trade> get trades => _trades;
   bool get isLoading => _isLoading;
 
@@ -120,6 +123,7 @@ class DashboardProvider extends ChangeNotifier {
     final decoded = json.decode(response.body) as Map<String, dynamic>;
     final accountJson = decoded['account'];
     final subscriptionJson = decoded['subscription'];
+    final businessRulesJson = decoded['business_rules'];
     final tradesJson = decoded['trades'];
 
     _account = accountJson is Map<String, dynamic>
@@ -128,6 +132,9 @@ class DashboardProvider extends ChangeNotifier {
     _subscription = subscriptionJson is Map<String, dynamic>
         ? Subscription.fromJson(subscriptionJson)
         : null;
+    _businessRules = businessRulesJson is Map<String, dynamic>
+      ? BusinessRules.fromJson(businessRulesJson)
+      : null;
     _trades = tradesJson is List
         ? tradesJson
             .whereType<Map>()
@@ -233,6 +240,7 @@ class DashboardProvider extends ChangeNotifier {
       _account = null;
       _trades = [];
       _subscription = null;
+      _businessRules = null;
     } catch (e) {
       debugPrint("Error disconnecting MT5: $e");
     } finally {

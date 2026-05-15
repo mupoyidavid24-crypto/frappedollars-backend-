@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/constants/constants.dart';
+import '../../core/services/business_rules_service.dart';
+import '../../models/business_rules_model.dart';
 import '../auth/kyc_screen.dart';
 import 'dashboard_screen.dart';
 
@@ -13,6 +15,23 @@ class SetupScreen extends StatefulWidget {
 
 class _SetupScreenState extends State<SetupScreen> {
   bool _isLoading = false;
+  BusinessRules? _businessRules;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBusinessRules();
+  }
+
+  Future<void> _loadBusinessRules() async {
+    final rules = await BusinessRulesService.instance.fetchBusinessRules();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _businessRules = rules;
+    });
+  }
 
   Future<void> _selectMode(bool needsVps) async {
     setState(() => _isLoading = true);
@@ -78,10 +97,28 @@ class _SetupScreenState extends State<SetupScreen> {
               const SizedBox(height: 24),
               _buildOptionCard(
                 title: 'J\'utilise mon téléphone',
-                subtitle: 'Installation sur nos serveurs.\nHébergement VPS : 35\$/mois.',
+                subtitle: _businessRules == null
+                    ? 'Installation sur nos serveurs.\nChargement des règles commerciales...'
+                    : 'Installation sur nos serveurs.\nHébergement VPS : ${_businessRules!.vpsMonthlyPrice.toStringAsFixed(0)}\$/mois.',
                 icon: Icons.phone_android,
                 onTap: () => _selectMode(true),
                 highlight: true,
+              ),
+              const SizedBox(height: 24),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white10,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.white24),
+                ),
+                child: Text(
+                  _businessRules?.weeklyProfitLimitLabel ??
+                      'Limite technique de protection: la copie s\'arrete automatiquement lorsque le profit hebdomadaire atteint 120 USD.',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.white70),
+                ),
               ),
               if (_isLoading) ...[
                 const SizedBox(height: 24),

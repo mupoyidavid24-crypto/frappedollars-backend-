@@ -8,14 +8,15 @@ Ce document sert de sauvegarde technique pour la V1.1 de l'application de Copy T
 - **Authentification :** Supabase Auth comme source de vérité
 - **Base de données :** Supabase PostgreSQL + Realtime comme source de vérité
 - **Backend :** FastAPI (Python)
+- **Source de vérité business :** backend FastAPI via `/business/rules` et inclusion dans `/dashboard/state`.
 - **Trading :** Expert Advisors MQL5 (Master & Client)
 - **Paiements :** Flutterwave (Intégré)
 - **Non utilisé :** Firestore pour les données métier
 
 ## 💰 Logique Business (Verrouillée)
-- **Abonnement Trading :** 30$ / semaine.
-- **Hébergement VPS :** 35$ / mois (pour les utilisateurs sur téléphone).
-- **Limite de Profit :** 204$ / semaine. Dès que cette limite est atteinte, la copie s'arrête jusqu'au lundi suivant (Reset auto).
+- **Abonnement Trading :** 50$ / semaine.
+- **Hébergement VPS :** 30$ / mois (pour les utilisateurs sur téléphone).
+- **Limite de Profit :** limite technique de protection: la copie s'arrête automatiquement lorsque le profit hebdomadaire atteint 120 USD.
 - **Capital Minimum :** 30$ requis sur le compte MT5 client pour copier un trade.
 - **Calcul du Lot :** `Lot_client = Lot_master * (Capital_client / Capital_master)`.
 - **Fidélité :** Synchronisation temps réel de l'ouverture ET de la fermeture des positions.

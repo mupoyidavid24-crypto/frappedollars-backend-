@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/constants/constants.dart';
+import '../../core/services/business_rules_service.dart';
+import '../../models/business_rules_model.dart';
 
 class SupportScreen extends StatefulWidget {
   const SupportScreen({super.key});
@@ -18,6 +20,7 @@ class _SupportScreenState extends State<SupportScreen> {
   bool _isFetchingTickets = false;
   Timer? _refreshTimer;
   List<Map<String, dynamic>> _tickets = [];
+  BusinessRules? _businessRules;
 
   String? get _currentUserId => Supabase.instance.client.auth.currentUser?.id;
 
@@ -25,7 +28,18 @@ class _SupportScreenState extends State<SupportScreen> {
   void initState() {
     super.initState();
     _loadTickets();
+    _loadBusinessRules();
     _refreshTimer = Timer.periodic(const Duration(seconds: 12), (_) => _loadTickets());
+  }
+
+  Future<void> _loadBusinessRules() async {
+    final rules = await BusinessRulesService.instance.fetchBusinessRules();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _businessRules = rules;
+    });
   }
 
   @override
@@ -118,6 +132,23 @@ class _SupportScreenState extends State<SupportScreen> {
       appBar: AppBar(title: const Text('Support Client')),
       body: Column(
         children: [
+          Container(
+            width: double.infinity,
+            margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.05),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.white24),
+            ),
+            child: Text(
+              _businessRules?.weeklyProfitLimitLabel ??
+                  'Limite technique de protection: la copie s\'arrete automatiquement lorsque le profit hebdomadaire atteint 120 USD.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white70),
+            ),
+          ),
+          const SizedBox(height: 12),
           // -- LIST OF TICKETS (REALTIME) --
           Expanded(
             child: _tickets.isEmpty

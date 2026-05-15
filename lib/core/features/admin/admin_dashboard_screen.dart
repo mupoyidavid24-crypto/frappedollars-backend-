@@ -6,6 +6,9 @@ import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../constants/constants.dart';
+import 'admin_business_rules_service.dart';
+import '../../services/business_rules_service.dart';
+import '../../../models/business_rules_model.dart';
 import 'admin_auth.dart';
 import 'admin_users_service.dart';
 import 'error_admin_service.dart';
@@ -31,7 +34,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     _dashboardFuture = _loadDashboardData();
   }
 
+  void _refreshDashboard() {
+    setState(() {
+      _dashboardFuture = _loadDashboardData();
+    });
+  }
+
   Future<_AdminDashboardData> _loadDashboardData() async {
+    final businessRules = await _fetchBusinessRules();
     final results = await Future.wait<dynamic>([
       _safeFetch(PaymentAdminService.fetchPayments),
       _safeFetch(NotificationAdminService.fetchNotifications),
@@ -101,9 +111,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       supportTicketsCount: _asInt(activitySummary['support_tickets']),
       openTicketsCount: _asInt(activitySummary['open_tickets']),
       activitySignalsCount: _asInt(activitySummary['signals']),
+      businessRules: businessRules,
       recentUsers: recentUsers,
       recentCopytrades: recentCopytrades,
     );
+  }
+
+  Future<BusinessRules?> _fetchBusinessRules() {
+    return BusinessRulesService.instance.fetchBusinessRules(forceRefresh: true);
   }
 
   Future<Map<String, dynamic>> _fetchDashboardSummary() async {
@@ -190,11 +205,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                               _AdminTopBar(
                                 isWide: isWide,
                                 isLoading: snapshot.connectionState == ConnectionState.waiting,
-                                onRefresh: () {
-                                  setState(() {
-                                    _dashboardFuture = _loadDashboardData();
-                                  });
-                                },
+                                onRefresh: _refreshDashboard,
                               ),
                               const SizedBox(height: 20),
                               Expanded(
@@ -203,6 +214,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
+                                      _buildBusinessRulesBanner(data.businessRules),
+                                      const SizedBox(height: 20),
+                                      _BusinessRulesEditor(initialRules: data.businessRules, onSaved: _refreshDashboard),
+                                      const SizedBox(height: 20),
                                       _buildHeroSection(context, data, isWide),
                                       const SizedBox(height: 20),
                                       _buildStatsRow(data, isWide),
@@ -225,6 +240,23 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildBusinessRulesBanner(BusinessRules? businessRules) {
+    return _GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _SectionTitle(title: 'Règle commerciale officielle'),
+          const SizedBox(height: 10),
+          Text(
+            businessRules?.weeklyProfitLimitLabel ??
+                'Limite technique de protection: la copie s\'arrete automatiquement lorsque le profit hebdomadaire atteint 120 USD.',
+            style: const TextStyle(color: Colors.white70, height: 1.4),
+          ),
+        ],
       ),
     );
   }
@@ -664,7 +696,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _SectionTitle(title: 'Goal Overview'),
+          const _SectionTitle(title: 'Règle commerciale officielle'),
           const SizedBox(height: 14),
           Wrap(
             spacing: 14,
@@ -787,6 +819,7 @@ class _AdminDashboardData {
   final List<Map<String, dynamic>> recentUsers;
   final List<Map<String, dynamic>> recentCopytrades;
   final Map<String, dynamic> dispatchCounts;
+  final BusinessRules? businessRules;
   final int pendingPayments;
   final int validatedPayments;
   final int refusedPayments;
@@ -827,6 +860,7 @@ class _AdminDashboardData {
     required this.recentUsers,
     required this.recentCopytrades,
     required this.dispatchCounts,
+    required this.businessRules,
     required this.pendingPayments,
     required this.validatedPayments,
     required this.refusedPayments,
@@ -869,6 +903,7 @@ class _AdminDashboardData {
       recentUsers: [],
       recentCopytrades: [],
       dispatchCounts: {},
+      businessRules: null,
       pendingPayments: 0,
       validatedPayments: 0,
       refusedPayments: 0,
@@ -1602,6 +1637,198 @@ class _ActionLine extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _BusinessRulesEditor extends StatefulWidget {
+  final BusinessRules? initialRules;
+  final VoidCallback onSaved;
+
+  const _BusinessRulesEditor({required this.initialRules, required this.onSaved});
+
+  @override
+  State<_BusinessRulesEditor> createState() => _BusinessRulesEditorState();
+}
+
+class _BusinessRulesEditorState extends State<_BusinessRulesEditor> {
+  late final TextEditingController _currencyController;
+  late final TextEditingController _copyTradingPriceController;
+  late final TextEditingController _vpsPriceController;
+  late final TextEditingController _weeklyProfitLimitController;
+  late final TextEditingController _natureController;
+  late final TextEditingController _descriptionController;
+  late final TextEditingController _minimumCapitalController;
+  late final TextEditingController _paymentWindowController;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final rules = widget.initialRules;
+    _currencyController = TextEditingController(text: rules?.currency ?? 'USD');
+    _copyTradingPriceController = TextEditingController(text: _formatNumber(rules?.copyTradingWeeklyPrice ?? 50));
+    _vpsPriceController = TextEditingController(text: _formatNumber(rules?.vpsMonthlyPrice ?? 30));
+    _weeklyProfitLimitController = TextEditingController(text: _formatNumber(rules?.weeklyProfitLimit ?? 120));
+    _natureController = TextEditingController(text: rules?.weeklyProfitLimitNature ?? 'technical_limit');
+    _descriptionController = TextEditingController(text: rules?.weeklyProfitLimitDescription ?? '');
+    _minimumCapitalController = TextEditingController(text: _formatNumber(rules?.minimumCapitalRequired ?? 30));
+    _paymentWindowController = TextEditingController(
+      text: (rules?.subscriptionPaymentWindowWeekdays ?? const [5, 6]).join(', '),
+    );
+  }
+
+  @override
+  void dispose() {
+    _currencyController.dispose();
+    _copyTradingPriceController.dispose();
+    _vpsPriceController.dispose();
+    _weeklyProfitLimitController.dispose();
+    _natureController.dispose();
+    _descriptionController.dispose();
+    _minimumCapitalController.dispose();
+    _paymentWindowController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    setState(() {
+      _saving = true;
+    });
+
+    try {
+      await AdminBusinessRulesService.updateBusinessRules({
+        'currency': _currencyController.text.trim(),
+        'copy_trading_weekly_price': double.tryParse(_copyTradingPriceController.text.trim()) ?? 50,
+        'vps_monthly_price': double.tryParse(_vpsPriceController.text.trim()) ?? 30,
+        'weekly_profit_limit': double.tryParse(_weeklyProfitLimitController.text.trim()) ?? 120,
+        'weekly_profit_limit_nature': _natureController.text.trim(),
+        'weekly_profit_limit_description': _descriptionController.text.trim(),
+        'minimum_capital_required': double.tryParse(_minimumCapitalController.text.trim()) ?? 30,
+        'subscription_payment_window_weekdays': _parseWeekdays(_paymentWindowController.text),
+      });
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Règles métier mises à jour')),
+      );
+      widget.onSaved();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString())),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+        });
+      }
+    }
+  }
+
+  List<int> _parseWeekdays(String rawValue) {
+    final weekdays = rawValue
+        .split(RegExp(r'[ ,;]+'))
+        .map((item) => int.tryParse(item.trim()))
+        .whereType<int>()
+        .where((weekday) => weekday >= 1 && weekday <= 7)
+        .toList(growable: false);
+    return weekdays.isEmpty ? const [5, 6] : weekdays;
+  }
+
+  String _formatNumber(num value) {
+    if (value == value.roundToDouble()) {
+      return value.toStringAsFixed(0);
+    }
+    return value.toStringAsFixed(2);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final rules = widget.initialRules;
+    return _GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _SectionTitle(title: 'Règles métier éditables'),
+          const SizedBox(height: 8),
+          Text(
+            rules?.weeklyProfitLimitLabel ??
+                'La limite hebdomadaire de 120 USD est une protection technique, modifiable ici sans redéploiement.',
+            style: const TextStyle(color: Colors.white70),
+          ),
+          const SizedBox(height: 16),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final wide = constraints.maxWidth >= 900;
+              final children = [
+                _RuleField(controller: _currencyController, label: 'Devise'),
+                _RuleField(controller: _copyTradingPriceController, label: 'Copy trading / semaine'),
+                _RuleField(controller: _vpsPriceController, label: 'VPS / mois'),
+                _RuleField(controller: _weeklyProfitLimitController, label: 'Plafond technique hebdo'),
+                _RuleField(controller: _minimumCapitalController, label: 'Capital minimum'),
+                _RuleField(controller: _natureController, label: 'Nature du plafond'),
+                _RuleField(controller: _paymentWindowController, label: 'Fenêtre paiement (jours 1-7)'),
+                _RuleField(controller: _descriptionController, label: 'Description officielle', maxLines: 3),
+              ];
+
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: children
+                    .map(
+                      (field) => SizedBox(
+                        width: wide ? (constraints.maxWidth - 12) / 2 : constraints.maxWidth,
+                        child: field,
+                      ),
+                    )
+                    .toList(),
+              );
+            },
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _saving ? null : _save,
+              icon: _saving
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Icon(Icons.save),
+              label: Text(_saving ? 'Enregistrement...' : 'Enregistrer les règles'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(AppConstants.primaryColor),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RuleField extends StatelessWidget {
+  final TextEditingController controller;
+  final String label;
+  final int maxLines;
+
+  const _RuleField({required this.controller, required this.label, this.maxLines = 1});
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      maxLines: maxLines,
+      style: const TextStyle(color: Colors.white),
+      decoration: InputDecoration(
+        labelText: label,
       ),
     );
   }

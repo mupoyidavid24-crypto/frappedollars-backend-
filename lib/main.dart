@@ -32,6 +32,10 @@ void main() async {
     await Supabase.initialize(
       url: AppConstants.supabaseUrl,
       anonKey: AppConstants.supabaseAnonKey,
+      authOptions: const FlutterAuthClientOptions(
+        autoRefreshToken: false,
+        detectSessionInUri: false,
+      ),
     );
   } catch (e) {
     debugPrint('Supabase Initialization Error: $e');

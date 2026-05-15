@@ -8,7 +8,7 @@ import requests
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from backend.config import get_current_admin, supabase
+from backend.config import get_business_rules_payload, get_current_admin, supabase, upsert_business_rules_payload
 from backend.error_reporting import report_exception
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -26,38 +26,64 @@ class PaymentDecisionPayload(BaseModel):
     motif: str | None = None
 
 
-def _send_user_notification(user_id: str, title: str, message: str, priority: str = "NORMAL") -> None:
-    supabase.table("notifications").insert(
-        {
-            "user_id": user_id,
-            "title": title,
-            "message": message,
-            "priority": priority,
-        }
-    ).execute()
+class BusinessRulesUpdatePayload(BaseModel):
+    currency: str | None = None
+    copy_trading_weekly_price: float | None = None
+    vps_monthly_price: float | None = None
 
-    token_res = supabase.table("profiles").select("fcm_token").eq("id", user_id).execute()
-    fcm_token = token_res.data[0]["fcm_token"] if token_res.data and token_res.data[0].get("fcm_token") else None
 
-    if fcm_token and FCM_SERVER_KEY:
-        fcm_payload = {
-            "to": fcm_token,
-            "notification": {
-                "title": title,
-                "body": message,
-            },
-            "data": {
-                "priority": priority,
-            },
-        }
-        headers = {
-            "Authorization": f"key={FCM_SERVER_KEY}",
-            "Content-Type": "application/json",
-        }
-        try:
-            requests.post("https://fcm.googleapis.com/fcm/send", json=fcm_payload, headers=headers, timeout=10)
-        except Exception as exc:
-            print(f"Erreur FCM: {exc}")
+@router.get("/business-rules")
+def read_business_rules(admin=Depends(get_current_admin)):
+    del admin
+    return get_business_rules_payload()
+
+
+@router.put("/business-rules")
+def update_business_rules(payload: BusinessRulesUpdatePayload, admin=Depends(get_current_admin)):
+    admin_id = str(admin.get("id") or "")
+    return upsert_business_rules_payload(payload.model_dump(exclude_none=True), updated_by=admin_id or None)
+
+
+@router.get("/payment-methods")
+def list_payment_methods(admin=Depends(get_current_admin)):
+    del admin
+    try:
+        res = (
+            supabase.table("payment_methods")
+            .select("id, provider, label, account_name, account_number, is_active, metadata, created_at, updated_at")
+            .order("created_at", desc=True)
+            .execute()
+        )
+        return res.data or []
+    except Exception as exc:
+        print(f"Erreur payment_methods: {exc}")
+        report_exception("admin_routes.payment_methods", exc, source="backend", details={"route": "/admin/payment-methods"})
+        return []
+
+
+@router.post("/payment-methods")
+def create_payment_method(payload: PaymentMethodPayload, admin=Depends(get_current_admin)):
+    del admin
+    result = supabase.table("payment_methods").insert(payload.model_dump()).execute()
+    return result.data
+
+
+@router.patch("/payment-methods/{method_id}")
+def update_payment_method(method_id: str, payload: PaymentMethodPayload, admin=Depends(get_current_admin)):
+    del admin
+    result = supabase.table("payment_methods").update(payload.model_dump()).eq("id", method_id).execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Methode de paiement introuvable")
+    return result.data
+
+
+@router.delete("/payment-methods/{method_id}")
+def delete_payment_method(method_id: str, admin=Depends(get_current_admin)):
+    del admin
+    result = supabase.table("payment_methods").delete().eq("id", method_id).execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Methode de paiement introuvable")
+    return {"status": "deleted"}
 
 
 def _count_rejected_kyc_documents(user_id: str) -> int:
@@ -66,6 +92,56 @@ def _count_rejected_kyc_documents(user_id: str) -> int:
         .select("id", count="exact")
         .eq("user_id", user_id)
         .eq("status", "REJECTED")
+        .execute()
+    )
+    return int(rejected.count or 0)
+                return res.data or []
+            except Exception as exc:
+                print(f"Erreur payment_methods: {exc}")
+                report_exception("admin_routes.payment_methods", exc, source="backend", details={"route": "/admin/payment-methods"})
+                return []
+
+
+        @router.post("/payment-methods")
+        def create_payment_method(payload: PaymentMethodPayload, admin=Depends(get_current_admin)):
+            del admin
+            result = supabase.table("payment_methods").insert(payload.model_dump()).execute()
+            return result.data
+
+
+        @router.patch("/payment-methods/{method_id}")
+        def update_payment_method(method_id: str, payload: PaymentMethodPayload, admin=Depends(get_current_admin)):
+            del admin
+            result = supabase.table("payment_methods").update(payload.model_dump()).eq("id", method_id).execute()
+            if not result.data:
+                raise HTTPException(status_code=404, detail="Methode de paiement introuvable")
+            return result.data
+
+
+        @router.delete("/payment-methods/{method_id}")
+        def delete_payment_method(method_id: str, admin=Depends(get_current_admin)):
+            del admin
+            result = supabase.table("payment_methods").delete().eq("id", method_id).execute()
+            if not result.data:
+                raise HTTPException(status_code=404, detail="Methode de paiement introuvable")
+            return {"status": "deleted"}
+
+        @router.patch("/payment-methods/{method_id}")
+        def update_payment_method(method_id: str, payload: PaymentMethodPayload, admin=Depends(get_current_admin)):
+            del admin
+            result = supabase.table("payment_methods").update(payload.model_dump()).eq("id", method_id).execute()
+            if not result.data:
+                raise HTTPException(status_code=404, detail="Methode de paiement introuvable")
+            return result.data
+
+
+        @router.delete("/payment-methods/{method_id}")
+        def delete_payment_method(method_id: str, admin=Depends(get_current_admin)):
+            del admin
+            result = supabase.table("payment_methods").delete().eq("id", method_id).execute()
+            if not result.data:
+                raise HTTPException(status_code=404, detail="Methode de paiement introuvable")
+            return {"status": "deleted"}
         .execute()
     )
     return int(rejected.count or 0)
@@ -384,10 +460,99 @@ def update_kyc_document_status(
     reviewer_id = admin.get("id")
     status_value = payload.status.strip().upper()
     if status_value not in {"APPROVED", "REJECTED", "PENDING"}:
-        raise HTTPException(status_code=400, detail="Statut KYC invalide")
+    updated = supabase.table("profiles").update({"is_vip": True, "role": "VIP"}).eq("id", data["id"]).execute()
 
     reason = _build_kyc_reason(status_value, payload.reason, payload.reviewer_note)
 
+
+
+@router.post("/users/{user_id}/vip")
+def set_user_vip(user_id: str, payload: UserVipPayload, admin=Depends(get_current_admin)):
+    del admin
+    current = supabase.table("profiles").select("role").eq("id", user_id).maybe_single().execute()
+    current_row = current.data or {}
+    if not current_row:
+        raise HTTPException(status_code=404, detail="Utilisateur introuvable")
+
+    next_role = "VIP" if payload.is_vip else "CLIENT"
+    if str(current_row.get("role") or "").upper() == "ADMIN":
+        raise HTTPException(status_code=403, detail="Impossible de modifier le role d'un ADMIN")
+
+    result = supabase.table("profiles").update({"is_vip": payload.is_vip, "role": next_role}).eq("id", user_id).execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Utilisateur introuvable")
+    return {"status": "updated", "is_vip": payload.is_vip, "role": next_role}
+
+
+@router.post("/users/{user_id}/vps")
+def set_user_vps(user_id: str, payload: UserNeedsVpsPayload, admin=Depends(get_current_admin)):
+    del admin
+    profile_res = supabase.table("profiles").select("id, needs_vps").eq("id", user_id).maybe_single().execute()
+    profile = profile_res.data or {}
+    if not profile:
+        raise HTTPException(status_code=404, detail="Utilisateur introuvable")
+
+    result = supabase.table("profiles").update({"needs_vps": payload.needs_vps}).eq("id", user_id).execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Utilisateur introuvable")
+
+    assignment_payload = {
+        "user_id": user_id,
+        "status": "CONNECTED" if payload.needs_vps else "DISCONNECTED",
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    supabase.table("vps_assignments").upsert(assignment_payload, on_conflict="user_id").execute()
+    return {"status": "updated", "needs_vps": payload.needs_vps}
+
+
+@router.get("/vps/assignments")
+def list_vps_assignments(admin=Depends(get_current_admin)):
+    del admin
+    try:
+        assignments = (
+            supabase.table("vps_assignments")
+            .select("id, user_id, status, provider, host_label, notes, last_heartbeat, last_restart_requested_at, created_at, updated_at")
+            .order("updated_at", desc=True)
+            .execute()
+        )
+        profiles = supabase.table("profiles").select("id, email, full_name, needs_vps, role").execute()
+        profile_by_id = {str(row.get("id") or ""): row for row in (profiles.data or [])}
+        response: list[dict[str, Any]] = []
+        for assignment in assignments.data or []:
+            user_id = str(assignment.get("user_id") or "")
+            response.append({**assignment, "profile": profile_by_id.get(user_id, {})})
+        return response
+    except Exception as exc:
+        print(f"Erreur vps_assignments: {exc}")
+        report_exception("admin_routes.vps_assignments", exc, source="backend", details={"route": "/admin/vps/assignments"})
+        return []
+
+
+@router.post("/vps/assignments/{user_id}/action")
+def manage_vps_assignment(user_id: str, payload: VpsAssignmentPayload, admin=Depends(get_current_admin)):
+    del admin
+    status_value = payload.status.strip().upper()
+    if status_value not in {"CONNECTED", "DISCONNECTED", "RESTART_REQUESTED", "ERROR"}:
+        raise HTTPException(status_code=400, detail="Statut VPS invalide")
+
+    update_data: dict[str, Any] = {
+        "user_id": user_id,
+        "status": status_value,
+        "provider": payload.provider,
+        "host_label": payload.host_label,
+        "notes": payload.notes,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    if status_value == "RESTART_REQUESTED":
+        update_data["last_restart_requested_at"] = datetime.now(timezone.utc).isoformat()
+
+    supabase.table("vps_assignments").upsert(update_data, on_conflict="user_id").execute()
+    if status_value == "CONNECTED":
+        supabase.table("profiles").update({"needs_vps": True}).eq("id", user_id).execute()
+    elif status_value == "DISCONNECTED":
+        supabase.table("profiles").update({"needs_vps": False}).eq("id", user_id).execute()
+
+    return {"status": status_value, "user_id": user_id}
     document_res = (
         supabase.table("kyc_documents")
         .select("id, user_id, status, file_url")
