@@ -32,6 +32,30 @@ class BusinessRulesUpdatePayload(BaseModel):
     vps_monthly_price: float | None = None
 
 
+class PaymentMethodPayload(BaseModel):
+    provider: str
+    label: str
+    account_name: str | None = None
+    account_number: str | None = None
+    is_active: bool = True
+    metadata: dict[str, Any] | None = None
+
+
+class UserVipPayload(BaseModel):
+    is_vip: bool
+
+
+class UserNeedsVpsPayload(BaseModel):
+    needs_vps: bool
+
+
+class VpsAssignmentPayload(BaseModel):
+    status: str
+    provider: str | None = None
+    host_label: str | None = None
+    notes: str | None = None
+
+
 @router.get("/business-rules")
 def read_business_rules(admin=Depends(get_current_admin)):
     del admin
@@ -92,56 +116,6 @@ def _count_rejected_kyc_documents(user_id: str) -> int:
         .select("id", count="exact")
         .eq("user_id", user_id)
         .eq("status", "REJECTED")
-        .execute()
-    )
-    return int(rejected.count or 0)
-                return res.data or []
-            except Exception as exc:
-                print(f"Erreur payment_methods: {exc}")
-                report_exception("admin_routes.payment_methods", exc, source="backend", details={"route": "/admin/payment-methods"})
-                return []
-
-
-        @router.post("/payment-methods")
-        def create_payment_method(payload: PaymentMethodPayload, admin=Depends(get_current_admin)):
-            del admin
-            result = supabase.table("payment_methods").insert(payload.model_dump()).execute()
-            return result.data
-
-
-        @router.patch("/payment-methods/{method_id}")
-        def update_payment_method(method_id: str, payload: PaymentMethodPayload, admin=Depends(get_current_admin)):
-            del admin
-            result = supabase.table("payment_methods").update(payload.model_dump()).eq("id", method_id).execute()
-            if not result.data:
-                raise HTTPException(status_code=404, detail="Methode de paiement introuvable")
-            return result.data
-
-
-        @router.delete("/payment-methods/{method_id}")
-        def delete_payment_method(method_id: str, admin=Depends(get_current_admin)):
-            del admin
-            result = supabase.table("payment_methods").delete().eq("id", method_id).execute()
-            if not result.data:
-                raise HTTPException(status_code=404, detail="Methode de paiement introuvable")
-            return {"status": "deleted"}
-
-        @router.patch("/payment-methods/{method_id}")
-        def update_payment_method(method_id: str, payload: PaymentMethodPayload, admin=Depends(get_current_admin)):
-            del admin
-            result = supabase.table("payment_methods").update(payload.model_dump()).eq("id", method_id).execute()
-            if not result.data:
-                raise HTTPException(status_code=404, detail="Methode de paiement introuvable")
-            return result.data
-
-
-        @router.delete("/payment-methods/{method_id}")
-        def delete_payment_method(method_id: str, admin=Depends(get_current_admin)):
-            del admin
-            result = supabase.table("payment_methods").delete().eq("id", method_id).execute()
-            if not result.data:
-                raise HTTPException(status_code=404, detail="Methode de paiement introuvable")
-            return {"status": "deleted"}
         .execute()
     )
     return int(rejected.count or 0)
@@ -460,7 +434,72 @@ def update_kyc_document_status(
     reviewer_id = admin.get("id")
     status_value = payload.status.strip().upper()
     if status_value not in {"APPROVED", "REJECTED", "PENDING"}:
-    updated = supabase.table("profiles").update({"is_vip": True, "role": "VIP"}).eq("id", data["id"]).execute()
+        raise HTTPException(status_code=400, detail="Statut KYC invalide")
+
+    document_res = (
+        supabase.table("kyc_documents")
+        .select("id, user_id, status, file_url")
+        .eq("id", document_id)
+        .maybe_single()
+        .execute()
+    )
+    document = document_res.data or {}
+    if not document:
+        raise HTTPException(status_code=404, detail="Document KYC introuvable")
+
+    reason = _build_kyc_reason(status_value, payload.reason, payload.reviewer_note)
+
+    profile_update: dict[str, Any] = {
+        "kyc_status": status_value,
+        "kyc_blocked": status_value != "APPROVED",
+    }
+    document_update: dict[str, Any] = {
+        "status": status_value,
+        "reason": reason,
+        "reviewer_id": reviewer_id,
+        "reviewer_note": reason,
+        "reviewed_at": datetime.now(timezone.utc).isoformat() if status_value != "PENDING" else None,
+    }
+
+    updated_document = (
+        supabase.table("kyc_documents")
+        .update(document_update)
+        .eq("id", document_id)
+        .execute()
+    )
+    if not updated_document.data:
+        raise HTTPException(status_code=404, detail="Document KYC introuvable")
+
+    user_id = str(document.get("user_id") or "")
+    supabase.table("profiles").update(profile_update).eq("id", user_id).execute()
+
+    if status_value == "APPROVED":
+        _send_user_notification(
+            user_id,
+            "KYC approuvé",
+            "Votre vérification KYC a été approuvée. Le copy trading est maintenant disponible.",
+            "HIGH",
+        )
+    elif status_value == "REJECTED":
+        _send_user_notification(
+            user_id,
+            "KYC rejeté",
+            payload.reviewer_note or "Votre vérification KYC a été rejetée. Veuillez corriger vos informations et soumettre à nouveau.",
+            "HIGH",
+        )
+    else:
+        _send_user_notification(
+            user_id,
+            "KYC en attente",
+            reason,
+            "NORMAL",
+        )
+
+    rejected_count = _count_rejected_kyc_documents(user_id)
+    if rejected_count >= 2:
+        _alert_admin_repeated_rejections(user_id, reviewer_id, rejected_count)
+
+    return {"status": status_value, "document_id": document_id}
 
     reason = _build_kyc_reason(status_value, payload.reason, payload.reviewer_note)
 
@@ -553,68 +592,6 @@ def manage_vps_assignment(user_id: str, payload: VpsAssignmentPayload, admin=Dep
         supabase.table("profiles").update({"needs_vps": False}).eq("id", user_id).execute()
 
     return {"status": status_value, "user_id": user_id}
-    document_res = (
-        supabase.table("kyc_documents")
-        .select("id, user_id, status, file_url")
-        .eq("id", document_id)
-        .maybe_single()
-        .execute()
-    )
-    document = document_res.data or {}
-    if not document:
-        raise HTTPException(status_code=404, detail="Document KYC introuvable")
-
-    profile_update: dict[str, Any] = {
-        "kyc_status": status_value,
-        "kyc_blocked": status_value != "APPROVED",
-    }
-    document_update: dict[str, Any] = {
-        "status": status_value,
-        "reason": reason,
-        "reviewer_id": reviewer_id,
-        "reviewer_note": reason,
-        "reviewed_at": datetime.now(timezone.utc).isoformat() if status_value != "PENDING" else None,
-    }
-
-    updated_document = (
-        supabase.table("kyc_documents")
-        .update(document_update)
-        .eq("id", document_id)
-        .execute()
-    )
-    if not updated_document.data:
-        raise HTTPException(status_code=404, detail="Document KYC introuvable")
-
-    user_id = str(document.get("user_id") or "")
-    supabase.table("profiles").update(profile_update).eq("id", user_id).execute()
-
-    if status_value == "APPROVED":
-        _send_user_notification(
-            user_id,
-            "KYC approuvé",
-            "Votre vérification KYC a été approuvée. Le copy trading est maintenant disponible.",
-            "HIGH",
-        )
-    elif status_value == "REJECTED":
-        _send_user_notification(
-            user_id,
-            "KYC rejeté",
-            payload.reviewer_note or "Votre vérification KYC a été rejetée. Veuillez corriger vos informations et soumettre à nouveau.",
-            "HIGH",
-        )
-    else:
-        _send_user_notification(
-            user_id,
-            "KYC en attente",
-            reason,
-            "NORMAL",
-        )
-
-    rejected_count = _count_rejected_kyc_documents(user_id)
-    if rejected_count >= 2:
-        _alert_admin_repeated_rejections(user_id, reviewer_id, rejected_count)
-
-    return {"status": status_value, "document_id": document_id}
 
 
 @router.get("/support_tickets")

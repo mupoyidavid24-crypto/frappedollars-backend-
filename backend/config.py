@@ -82,18 +82,22 @@ def get_current_admin(authorization: str | None = Header(default=None)):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Acces admin refuse.",
+        )
+    return profile_row
+
+
 BUSINESS_RULE_DEFAULTS: dict[str, object] = {
-MIN_CAPITAL_REQUIRED = 30.0
+    "currency": "USD",
     "copy_trading_weekly_price": 50.0,
     "vps_monthly_price": 30.0,
     "weekly_profit_limit": 120.0,
-    "copy_trading_weekly_price": PRICES["COPY_TRADING_WEEKLY"],
-    "vps_monthly_price": PRICES["VPS_MONTHLY"],
-    "weekly_profit_limit": WEEKLY_PROFIT_LIMIT,
     "weekly_profit_limit_nature": "technical_limit",
-    "minimum_capital_required": 30.0,
+    "weekly_profit_limit_description": (
         "Limite technique de protection: la copie s'arrete automatiquement lorsque le profit hebdomadaire atteint 120 USD."
     ),
+    "minimum_capital_required": 30.0,
+    "subscription_payment_window_weekdays": [5, 6],
+}
 
 PRICES = {
     "COPY_TRADING_WEEKLY": float(BUSINESS_RULE_DEFAULTS["copy_trading_weekly_price"]),
@@ -225,9 +229,6 @@ def upsert_business_rules_payload(payload: dict[str, Any], updated_by: str | Non
         return _merge_business_rules(row if isinstance(row, dict) else normalized)
     except Exception:
         return _merge_business_rules(normalized)
-    "minimum_capital_required": MIN_CAPITAL_REQUIRED,
-    "subscription_payment_window_weekdays": [5, 6],
-}
 
 
 def get_business_rules_payload() -> dict[str, object]:
