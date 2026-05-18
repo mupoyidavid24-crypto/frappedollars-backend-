@@ -58,13 +58,27 @@ class _PaymentFormState extends State<PaymentForm> {
   }
 
   Future<void> _pickProof() async {
-    final result = await FilePicker.platform.pickFiles(type: FileType.image, withData: true);
-    if (result == null || result.files.isEmpty) {
-      return;
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.image,
+        withData: true,
+        withReadStream: true,
+        allowMultiple: false,
+      );
+      if (result == null || result.files.isEmpty) {
+        return;
+      }
+      setState(() {
+        _proofFile = result.files.first;
+      });
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erreur sélection preuve: $e')),
+      );
     }
-    setState(() {
-      _proofFile = result.files.first;
-    });
   }
 
   Future<void> _submit() async {

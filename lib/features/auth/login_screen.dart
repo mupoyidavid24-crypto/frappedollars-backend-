@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/constants/constants.dart';
+import '../../core/services/app_settings_provider.dart';
 import 'auth_provider.dart';
 
 import 'register_screen.dart';
@@ -59,6 +60,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final isLoading = context.watch<AuthProvider>().isLoading;
+    final branding = context.watch<AppSettingsProvider>().settings;
 
     return Scaffold(
       body: Container(
@@ -85,17 +87,33 @@ class _LoginScreenState extends State<LoginScreen> {
                         borderRadius: BorderRadius.circular(24),
                         border: Border.all(color: Colors.white.withOpacity(0.08)),
                       ),
-                      child: Image.asset(
-                        'web/icons/frappe logo.png',
-                        width: 120,
-                        height: 120,
-                        fit: BoxFit.cover,
-                      ),
+                      child: branding.logoUrl != null && branding.logoUrl!.isNotEmpty
+                          ? ClipRRect(
+                              borderRadius: BorderRadius.circular(18),
+                              child: Image.network(
+                                branding.logoUrl!,
+                                width: 120,
+                                height: 120,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => Image.asset(
+                                  'web/icons/frappe logo.png',
+                                  width: 120,
+                                  height: 120,
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                            )
+                          : Image.asset(
+                              'web/icons/frappe logo.png',
+                              width: 120,
+                              height: 120,
+                              fit: BoxFit.cover,
+                            ),
                     ),
                   ),
                   const SizedBox(height: 24),
-                  const Text(
-                    'Bienvenue sur\nFrappedDollars',
+                  Text(
+                    'Bienvenue sur\n${branding.appName}',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 28,
@@ -104,8 +122,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  const Text(
-                    'Copy trading automatique pour comptes MT5.',
+                  Text(
+                    branding.tagline,
                     textAlign: TextAlign.center,
                     style: TextStyle(color: Colors.white70),
                   ),

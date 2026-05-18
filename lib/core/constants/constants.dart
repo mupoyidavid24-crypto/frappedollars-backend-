@@ -1,6 +1,13 @@
 class AppConstants {
-  static const String backendBaseUrl = 'https://frappedollars-backend-1.onrender.com';
-  static const String appWebUrl = 'https://frappe-dollars.web.app';
+  static const String backendBaseUrl = String.fromEnvironment(
+    'FRAPPEDOLLARS_BACKEND_BASE_URL',
+    defaultValue: 'https://frappedollars-backend-1.onrender.com',
+  );
+
+  static const String appWebUrl = String.fromEnvironment(
+    'FRAPPEDOLLARS_APP_WEB_URL',
+    defaultValue: 'https://frappe-dollars.web.app',
+  );
 
   static const String adminBaseUrl = '$backendBaseUrl/admin';
   static const String authRedirectUrl = '$appWebUrl/auth/callback';

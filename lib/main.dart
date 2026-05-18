@@ -9,12 +9,17 @@ import 'features/auth/kyc_screen.dart';
 import 'features/admin/admin_login_screen.dart';
 import 'core/features/admin/admin_api_keys_screen.dart';
 import 'core/features/admin/admin_dashboard_screen.dart' as modern_admin;
+import 'core/features/admin/admin_branding_screen.dart';
 import 'core/features/admin/admin_copytrading_screen.dart';
 import 'core/features/admin/admin_kyc_screen.dart';
 import 'core/features/admin/admin_logs_screen.dart';
 import 'core/features/admin/admin_notifications_screen.dart';
+import 'core/features/admin/admin_payment_methods_screen.dart';
 import 'core/features/admin/admin_payments_screen.dart';
+import 'core/features/admin/admin_users_screen.dart';
 import 'core/features/admin/admin_vip_screen.dart';
+import 'core/features/admin/admin_vps_screen.dart';
+import 'core/services/app_settings_provider.dart';
 import 'features/dashboard/dashboard_provider.dart';
 import 'features/dashboard/main_navigation_screen.dart';
 import 'core/services/notification_service.dart';
@@ -49,6 +54,7 @@ void main() async {
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => DashboardProvider()),
+        ChangeNotifierProvider(create: (_) => AppSettingsProvider()..load()),
       ],
       child: const MyApp(),
     ),
@@ -68,18 +74,20 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final branding = context.watch<AppSettingsProvider>().settings;
+
     return MaterialApp(
-      title: 'FrappedDollars',
+      title: branding.appName,
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.dark,
         fontFamily: 'Arial',
-        scaffoldBackgroundColor: const Color(AppConstants.backgroundColor),
+        scaffoldBackgroundColor: branding.backgroundColor,
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(AppConstants.primaryColor),
+          seedColor: branding.primaryColor,
           brightness: Brightness.dark,
-          surface: const Color(AppConstants.backgroundColor),
+          surface: branding.backgroundColor,
         ),
       ),
       initialRoute: _initialRoute(),
@@ -90,6 +98,10 @@ class MyApp extends StatelessWidget {
         '/admin/dashboard': (context) =>
             const modern_admin.AdminDashboardScreen(),
         '/admin/api-keys': (context) => const AdminApiKeysScreen(),
+        '/admin/users': (context) => const AdminUsersScreen(),
+        '/admin/vps': (context) => const AdminVpsScreen(),
+        '/admin/payment-methods': (context) => const AdminPaymentMethodsScreen(),
+        '/admin/branding': (context) => const AdminBrandingScreen(),
         '/admin/payments': (context) => const AdminPaymentsScreen(),
         '/admin/notifications': (context) => const AdminNotificationsScreen(),
         '/admin/vip': (context) => const AdminVIPScreen(),

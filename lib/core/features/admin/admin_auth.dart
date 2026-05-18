@@ -2,7 +2,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AdminAuth {
   static Future<void> logout() async {
-    await Supabase.instance.client.auth.signOut();
+    await Supabase.instance.client.auth.signOut(scope: SignOutScope.local);
   }
 
   static Map<String, String> headers({bool jsonContent = false}) {

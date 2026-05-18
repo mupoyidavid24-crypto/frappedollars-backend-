@@ -23,4 +23,34 @@ class AdminUsersService {
 
     return const [];
   }
+
+  static Future<void> activateUser(String userId) async {
+    final response = await http.post(
+      Uri.parse('${AppConstants.adminBaseUrl}/users/activate/$userId'),
+      headers: AdminAuth.headers(),
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Erreur activation utilisateur');
+    }
+  }
+
+  static Future<void> suspendUser(String userId) async {
+    final response = await http.post(
+      Uri.parse('${AppConstants.adminBaseUrl}/users/suspend/$userId'),
+      headers: AdminAuth.headers(),
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Erreur suspension utilisateur');
+    }
+  }
+
+  static Future<void> deleteUser(String userId) async {
+    final response = await http.delete(
+      Uri.parse('${AppConstants.adminBaseUrl}/users/$userId'),
+      headers: AdminAuth.headers(),
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Erreur suppression utilisateur');
+    }
+  }
 }

@@ -25,6 +25,7 @@ class _KycScreenState extends State<KycScreen> {
   String _documentType = 'NATIONAL_ID';
   bool _isSubmitting = false;
   bool _isRefreshing = false;
+  DateTime? _dateOfBirth;
   PlatformFile? _pickedDocument;
 
   @override
@@ -37,9 +38,35 @@ class _KycScreenState extends State<KycScreen> {
   }
 
   Future<void> _pickDocument() async {
-    final document = await _kycService.pickDocument();
-    if (!mounted) return;
-    setState(() => _pickedDocument = document);
+    try {
+      final document = await _kycService.pickDocument();
+      if (!mounted) return;
+      setState(() => _pickedDocument = document);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erreur sélection fichier: $e')),
+      );
+    }
+  }
+
+  Future<void> _pickDateOfBirth() async {
+    final profile = context.read<AuthProvider>().userProfile;
+    final now = DateTime.now();
+    final initialDate = _dateOfBirth ?? profile?.dateOfBirth ?? DateTime(now.year - 18, now.month, now.day);
+    final lastAllowedDate = DateTime(now.year - 18, now.month, now.day);
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initialDate.isAfter(lastAllowedDate) ? lastAllowedDate : initialDate,
+      firstDate: DateTime(1940),
+      lastDate: lastAllowedDate,
+    );
+
+    if (!mounted || picked == null) {
+      return;
+    }
+
+    setState(() => _dateOfBirth = picked);
   }
 
   Future<void> _refreshProfile() async {
@@ -68,9 +95,10 @@ class _KycScreenState extends State<KycScreen> {
 
     final authProvider = context.read<AuthProvider>();
     final profile = authProvider.userProfile;
-    if (profile == null || profile.dateOfBirth == null) {
+    final dateOfBirth = _dateOfBirth ?? profile?.dateOfBirth;
+    if (profile == null || dateOfBirth == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Le profil doit contenir une date de naissance valide.')),
+        const SnackBar(content: Text('Veuillez renseigner une date de naissance valide.')),
       );
       return;
     }
@@ -81,7 +109,7 @@ class _KycScreenState extends State<KycScreen> {
         userId: profile.id,
         fullName: profile.fullName ?? '',
         phoneNumber: profile.phoneNumber ?? '',
-        dateOfBirth: profile.dateOfBirth!,
+        dateOfBirth: dateOfBirth,
         addressLine: _addressController.text.trim(),
         country: _countryController.text.trim(),
         city: _cityController.text.trim(),
@@ -213,6 +241,21 @@ class _KycScreenState extends State<KycScreen> {
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 16),
+              InkWell(
+                onTap: _pickDateOfBirth,
+                child: InputDecorator(
+                  decoration: const InputDecoration(
+                    labelText: 'Date de naissance',
+                    prefixIcon: Icon(Icons.cake_outlined),
+                  ),
+                  child: Text(
+                    (_dateOfBirth ?? profile.dateOfBirth) == null
+                        ? 'Sélectionner votre date de naissance'
+                        : '${(_dateOfBirth ?? profile.dateOfBirth)!.year.toString().padLeft(4, '0')}-${(_dateOfBirth ?? profile.dateOfBirth)!.month.toString().padLeft(2, '0')}-${(_dateOfBirth ?? profile.dateOfBirth)!.day.toString().padLeft(2, '0')}',
+                  ),
+                ),
               ),
               const SizedBox(height: 16),
               TextFormField(

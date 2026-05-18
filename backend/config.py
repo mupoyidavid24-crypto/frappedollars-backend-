@@ -109,6 +109,16 @@ MIN_CAPITAL_REQUIRED = float(BUSINESS_RULE_DEFAULTS["minimum_capital_required"])
 
 BUSINESS_RULES = dict(BUSINESS_RULE_DEFAULTS)
 
+APP_SETTINGS_DEFAULTS: dict[str, object] = {
+    "app_name": "FrappedDollars",
+    "tagline": "Copy trading automatique pour comptes MT5.",
+    "logo_url": None,
+    "primary_color_hex": "#00C853",
+    "background_color_hex": "#121212",
+    "support_email": None,
+    "support_phone": None,
+}
+
 
 def _coerce_float(value: Any, fallback: float) -> float:
     if isinstance(value, bool):
@@ -133,6 +143,13 @@ def _coerce_weekdays(value: Any) -> list[int]:
                 weekdays.append(weekday)
         return weekdays or [5, 6]
     return [5, 6]
+
+
+def _normalize_color_hex(value: Any, fallback: str) -> str:
+    text = str(value or "").strip().lstrip("#")
+    if len(text) == 6:
+        return f"#{text.upper()}"
+    return fallback
 
 
 def _merge_business_rules(row: dict[str, Any] | None) -> dict[str, object]:
@@ -188,6 +205,33 @@ def _business_rules_payload_from_updates(payload: dict[str, Any]) -> dict[str, o
     }
 
 
+def _merge_app_settings(row: dict[str, Any] | None) -> dict[str, object]:
+    merged = dict(APP_SETTINGS_DEFAULTS)
+    if not row:
+        return merged
+
+    merged["app_name"] = str(row.get("app_name") or merged["app_name"])
+    merged["tagline"] = str(row.get("tagline") or merged["tagline"])
+    merged["logo_url"] = row.get("logo_url") or merged["logo_url"]
+    merged["primary_color_hex"] = _normalize_color_hex(row.get("primary_color_hex"), str(merged["primary_color_hex"]))
+    merged["background_color_hex"] = _normalize_color_hex(row.get("background_color_hex"), str(merged["background_color_hex"]))
+    merged["support_email"] = row.get("support_email") or merged["support_email"]
+    merged["support_phone"] = row.get("support_phone") or merged["support_phone"]
+    return merged
+
+
+def _app_settings_payload_from_updates(payload: dict[str, Any]) -> dict[str, object]:
+    return {
+        "app_name": str(payload.get("app_name") or APP_SETTINGS_DEFAULTS["app_name"]),
+        "tagline": str(payload.get("tagline") or APP_SETTINGS_DEFAULTS["tagline"]),
+        "logo_url": payload.get("logo_url") or None,
+        "primary_color_hex": _normalize_color_hex(payload.get("primary_color_hex"), str(APP_SETTINGS_DEFAULTS["primary_color_hex"])),
+        "background_color_hex": _normalize_color_hex(payload.get("background_color_hex"), str(APP_SETTINGS_DEFAULTS["background_color_hex"])),
+        "support_email": payload.get("support_email") or None,
+        "support_phone": payload.get("support_phone") or None,
+    }
+
+
 def get_business_rules_payload() -> dict[str, object]:
     try:
         response = (
@@ -232,4 +276,46 @@ def upsert_business_rules_payload(payload: dict[str, Any], updated_by: str | Non
 
 
 def get_business_rules_payload() -> dict[str, object]:
-    return dict(BUSINESS_RULES)
+    try:
+        response = (
+            supabase.table("business_rules")
+            .select(
+                "id, currency, copy_trading_weekly_price, vps_monthly_price, weekly_profit_limit, weekly_profit_limit_nature, weekly_profit_limit_description, minimum_capital_required, subscription_payment_window_weekdays, updated_at",
+            )
+            .order("updated_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        row = (response.data or [{}])[0]
+        return _merge_business_rules(row if isinstance(row, dict) else None)
+    except Exception:
+        return dict(BUSINESS_RULE_DEFAULTS)
+
+
+def get_app_settings_payload() -> dict[str, object]:
+    try:
+        response = (
+            supabase.table("app_settings")
+            .select("id, app_name, tagline, logo_url, primary_color_hex, background_color_hex, support_email, support_phone, updated_at")
+            .eq("id", 1)
+            .maybe_single()
+            .execute()
+        )
+        row = response.data or {}
+        return _merge_app_settings(row if isinstance(row, dict) else None)
+    except Exception:
+        return dict(APP_SETTINGS_DEFAULTS)
+
+
+def upsert_app_settings_payload(payload: dict[str, Any], updated_by: str | None = None) -> dict[str, object]:
+    normalized = _app_settings_payload_from_updates(payload)
+    if updated_by:
+        normalized["updated_by"] = updated_by
+    normalized["updated_at"] = datetime.now(timezone.utc).isoformat()
+
+    try:
+        result = supabase.table("app_settings").upsert({"id": 1, **normalized}).execute()
+        row = (result.data or [normalized])[0]
+        return _merge_app_settings(row if isinstance(row, dict) else normalized)
+    except Exception:
+        return _merge_app_settings(normalized)

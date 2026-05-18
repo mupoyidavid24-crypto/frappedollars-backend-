@@ -4,10 +4,13 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:provider/provider.dart';
 
 import '../../constants/constants.dart';
 import 'admin_business_rules_service.dart';
 import '../../services/business_rules_service.dart';
+import '../../services/app_settings_provider.dart';
+import '../../../models/app_settings_model.dart';
 import '../../../models/business_rules_model.dart';
 import 'admin_auth.dart';
 import 'admin_users_service.dart';
@@ -15,6 +18,8 @@ import 'error_admin_service.dart';
 import 'copytrading_admin_service.dart';
 import 'logs_admin_service.dart';
 import 'notification_admin_service.dart';
+import 'admin_payment_methods_service.dart';
+import 'admin_vps_service.dart';
 import 'payment_admin_service.dart';
 import 'vip_admin_service.dart';
 
@@ -50,6 +55,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       _safeFetch(CopyTradingAdminService.fetchHistory),
       _safeFetch(ErrorAdminService.fetchErrors),
       _safeFetch(AdminUsersService.fetchUsers),
+      _safeFetch(AdminPaymentMethodsService.fetchPaymentMethods),
+      _safeFetch(AdminVpsService.fetchAssignments),
       _safeFetchMap(_fetchDashboardSummary),
     ]);
 
@@ -60,7 +67,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     final copytradingHistory = List<Map<String, dynamic>>.from(results[4] as List);
     final errorsLogs = List<Map<String, dynamic>>.from(results[5] as List);
     final adminUsers = List<Map<String, dynamic>>.from(results[6] as List);
-    final summary = Map<String, dynamic>.from(results[7] as Map);
+    final paymentMethods = List<Map<String, dynamic>>.from(results[7] as List);
+    final vpsAssignments = List<Map<String, dynamic>>.from(results[8] as List);
+    final summary = Map<String, dynamic>.from(results[9] as Map);
 
     final usersSummary = Map<String, dynamic>.from(summary['users'] as Map? ?? {});
     final accountsSummary = Map<String, dynamic>.from(summary['accounts'] as Map? ?? {});
@@ -112,6 +121,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       openTicketsCount: _asInt(activitySummary['open_tickets']),
       activitySignalsCount: _asInt(activitySummary['signals']),
       businessRules: businessRules,
+      paymentMethods: paymentMethods,
+      vpsAssignments: vpsAssignments,
       recentUsers: recentUsers,
       recentCopytrades: recentCopytrades,
     );
@@ -218,6 +229,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                       const SizedBox(height: 20),
                                       _BusinessRulesEditor(initialRules: data.businessRules, onSaved: _refreshDashboard),
                                       const SizedBox(height: 20),
+                                      _AdminModuleOverview(
+                                        recentUsers: data.recentUsers,
+                                        payments: data.payments,
+                                        notifications: data.notifications,
+                                        vipUsers: data.vipUsers,
+                                        paymentMethods: data.paymentMethods,
+                                        vpsAssignments: data.vpsAssignments,
+                                        copytradingHistory: data.copytradingHistory,
+                                      ),
+                                      const SizedBox(height: 20),
                                       _buildHeroSection(context, data, isWide),
                                       const SizedBox(height: 20),
                                       _buildStatsRow(data, isWide),
@@ -262,6 +283,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   Widget _buildHeroSection(BuildContext context, _AdminDashboardData data, bool isWide) {
+    final branding = context.watch<AppSettingsProvider>().settings;
     final totalSignals = data.signalsTotal + data.copiedTradesTotal;
 
     return Container(
@@ -287,14 +309,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           ? Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(flex: 5, child: _buildBalanceChart(totalSignals, data)),
+                Expanded(flex: 5, child: _buildBalanceChart(totalSignals, data, branding)),
                 const SizedBox(width: 16),
                 SizedBox(width: 320, child: _buildInsightPanel(data)),
               ],
             )
           : Column(
               children: [
-                _buildBalanceChart(totalSignals, data),
+                _buildBalanceChart(totalSignals, data, branding),
                 const SizedBox(height: 16),
                 _buildInsightPanel(data),
               ],
@@ -302,7 +324,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
-  Widget _buildBalanceChart(int totalSignals, _AdminDashboardData data) {
+  Widget _buildBalanceChart(int totalSignals, _AdminDashboardData data, AppSettings branding) {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -315,10 +337,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         children: [
           Row(
             children: [
-              const Expanded(
+              Expanded(
                 child: Text(
-                  'FrappedDollars Admin Center',
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: Colors.white),
+                  '${branding.appName} Admin Center',
+                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: Colors.white),
                 ),
               ),
               _StatusChip(label: '${data.validatedPayments} validés'),
@@ -524,6 +546,24 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   Widget _buildBottomGrid(BuildContext context, _AdminDashboardData data, bool isWide) {
     final quickActions = [
       _QuickActionCard(
+        icon: Icons.people,
+        title: 'Utilisateurs',
+        subtitle: 'Liste, activation, suspension et suppression',
+        onTap: () => Navigator.pushNamed(context, '/admin/users'),
+      ),
+      _QuickActionCard(
+        icon: Icons.payments_outlined,
+        title: 'Moyens de paiement',
+        subtitle: 'Activer, désactiver et maintenir les comptes',
+        onTap: () => Navigator.pushNamed(context, '/admin/payment-methods'),
+      ),
+      _QuickActionCard(
+        icon: Icons.design_services_outlined,
+        title: 'Branding',
+        subtitle: 'Nom, logo, couleurs et support',
+        onTap: () => Navigator.pushNamed(context, '/admin/branding'),
+      ),
+      _QuickActionCard(
         icon: Icons.payment,
         title: 'Paiements',
         subtitle: 'Listing, validation et refus',
@@ -546,6 +586,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         title: 'Copy Trading',
         subtitle: 'Statut, historique et latence',
         onTap: () => Navigator.pushNamed(context, '/admin/copytrading'),
+      ),
+      _QuickActionCard(
+        icon: Icons.dns_outlined,
+        title: 'VPS',
+        subtitle: 'Assignations et état des clients',
+        onTap: () => Navigator.pushNamed(context, '/admin/vps'),
       ),
       _QuickActionCard(
         icon: Icons.verified_user_outlined,
@@ -818,6 +864,8 @@ class _AdminDashboardData {
   final List<Map<String, dynamic>> errorsLogs;
   final List<Map<String, dynamic>> recentUsers;
   final List<Map<String, dynamic>> recentCopytrades;
+  final List<Map<String, dynamic>> paymentMethods;
+  final List<Map<String, dynamic>> vpsAssignments;
   final Map<String, dynamic> dispatchCounts;
   final BusinessRules? businessRules;
   final int pendingPayments;
@@ -859,6 +907,8 @@ class _AdminDashboardData {
     required this.errorsLogs,
     required this.recentUsers,
     required this.recentCopytrades,
+    required this.paymentMethods,
+    required this.vpsAssignments,
     required this.dispatchCounts,
     required this.businessRules,
     required this.pendingPayments,
@@ -902,6 +952,8 @@ class _AdminDashboardData {
       errorsLogs: [],
       recentUsers: [],
       recentCopytrades: [],
+      paymentMethods: [],
+      vpsAssignments: [],
       dispatchCounts: {},
       businessRules: null,
       pendingPayments: 0,
@@ -942,9 +994,13 @@ class _AdminSidebar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final branding = context.watch<AppSettingsProvider>().settings;
     final items = [
       _SidebarItemData(icon: Icons.dashboard, label: 'Dashboard', onTap: () => Navigator.pushReplacementNamed(context, '/admin/dashboard')),
+      _SidebarItemData(icon: Icons.people, label: 'Utilisateurs', onTap: () => Navigator.pushNamed(context, '/admin/users')),
       _SidebarItemData(icon: Icons.payment, label: 'Paiements', onTap: () => Navigator.pushNamed(context, '/admin/payments')),
+      _SidebarItemData(icon: Icons.dns_outlined, label: 'VPS', onTap: () => Navigator.pushNamed(context, '/admin/vps')),
+      _SidebarItemData(icon: Icons.design_services_outlined, label: 'Branding', onTap: () => Navigator.pushNamed(context, '/admin/branding')),
       _SidebarItemData(icon: Icons.notifications, label: 'Notifications', onTap: () => Navigator.pushNamed(context, '/admin/notifications')),
       _SidebarItemData(icon: Icons.star, label: 'Gestion VIP', onTap: () => Navigator.pushNamed(context, '/admin/vip')),
       _SidebarItemData(icon: Icons.verified_user_outlined, label: 'KYC', onTap: () => Navigator.pushNamed(context, '/admin/kyc')),
@@ -952,7 +1008,6 @@ class _AdminSidebar extends StatelessWidget {
       _SidebarItemData(icon: Icons.key, label: 'Clés API', onTap: () => Navigator.pushNamed(context, '/admin/api-keys')),
       _SidebarItemData(icon: Icons.list_alt, label: 'Logs', onTap: () => Navigator.pushNamed(context, '/admin/logs')),
       _SidebarItemData(icon: Icons.help_outline, label: 'Help Center', onTap: () {}),
-      _SidebarItemData(icon: Icons.public, label: 'Back to Website', onTap: () => Navigator.pushReplacementNamed(context, '/')),
     ];
 
     return Container(
@@ -987,10 +1042,10 @@ class _AdminSidebar extends StatelessWidget {
                 child: const Icon(Icons.show_chart, color: Colors.white, size: 22),
               ),
               const SizedBox(width: 12),
-              const Column(
+              Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('FrappedDollars', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                  Text(branding.appName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
                   Text('Admin Control', style: TextStyle(color: Colors.white54, fontSize: 12)),
                 ],
               ),
@@ -1334,6 +1389,112 @@ class _QuickActionCard extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _AdminModuleOverview extends StatelessWidget {
+  final List<Map<String, dynamic>> recentUsers;
+  final List<Map<String, dynamic>> payments;
+  final List<Map<String, dynamic>> notifications;
+  final List<Map<String, dynamic>> vipUsers;
+  final List<Map<String, dynamic>> paymentMethods;
+  final List<Map<String, dynamic>> vpsAssignments;
+  final List<Map<String, dynamic>> copytradingHistory;
+
+  const _AdminModuleOverview({
+    required this.recentUsers,
+    required this.payments,
+    required this.notifications,
+    required this.vipUsers,
+    required this.paymentMethods,
+    required this.vpsAssignments,
+    required this.copytradingHistory,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final kycCount = recentUsers.where((user) => (user['kyc_status']?.toString().toUpperCase() ?? 'PENDING') != 'APPROVED').length;
+    final modules = [
+      _ModuleStateCard(title: 'Utilisateurs', value: '${recentUsers.length}', subtitle: 'activation / suspension / suppression', icon: Icons.people),
+      _ModuleStateCard(title: 'Paiements', value: '${payments.length}', subtitle: '${paymentMethods.length} moyens configurés', icon: Icons.payment),
+      _ModuleStateCard(title: 'Notifications', value: '${notifications.length}', subtitle: 'messages envoyés', icon: Icons.notifications),
+      _ModuleStateCard(title: 'KYC', value: '$kycCount', subtitle: 'dossiers à traiter', icon: Icons.verified_user_outlined),
+      _ModuleStateCard(title: 'VIP', value: '${vipUsers.length}', subtitle: 'clients VIP actifs', icon: Icons.star),
+      _ModuleStateCard(title: 'VPS', value: '${vpsAssignments.length}', subtitle: 'assignations clients', icon: Icons.dns_outlined),
+      _ModuleStateCard(title: 'Copy trading', value: '${copytradingHistory.length}', subtitle: 'historique & contrôle', icon: Icons.sync_alt),
+    ];
+
+    return _GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _SectionTitle(title: 'Modules admin disponibles en prod'),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: modules
+                .map(
+                  (module) => SizedBox(
+                    width: MediaQuery.sizeOf(context).width >= 1100 ? 250 : (MediaQuery.sizeOf(context).width - 44) / 2,
+                    child: module,
+                  ),
+                )
+                .toList(),
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'Les sections ci-dessus sont branchées sur les routes admin de production. Si un module reste vide, le problème vient des données ou du rôle admin, pas du routing.',
+            style: TextStyle(color: Colors.white54, height: 1.4),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ModuleStateCard extends StatelessWidget {
+  final String title;
+  final String value;
+  final String subtitle;
+  final IconData icon;
+
+  const _ModuleStateCard({required this.title, required this.value, required this.subtitle, required this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        color: Colors.white.withOpacity(0.03),
+        border: Border.all(color: Colors.white.withOpacity(0.05)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: const Color(AppConstants.primaryColor).withOpacity(0.12),
+            ),
+            child: Icon(icon, color: const Color(AppConstants.primaryColor), size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                Text(value, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700)),
+                Text(subtitle, style: const TextStyle(color: Colors.white54, fontSize: 12)),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

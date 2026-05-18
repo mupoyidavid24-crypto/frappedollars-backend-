@@ -13,6 +13,7 @@ import '../auth/auth_provider.dart';
 import '../auth/kyc_screen.dart';
 import '../subscription/payment_service.dart';
 import 'dashboard_provider.dart';
+import '../../core/services/app_settings_provider.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -110,13 +111,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final userId = authProvider.userProfile!.id;
     final profile = authProvider.userProfile!;
     final dashboardProvider = context.watch<DashboardProvider>();
+    final branding = context.watch<AppSettingsProvider>().settings;
     final businessRules = dashboardProvider.businessRules;
     final isPaymentWindowOpen = businessRules?.isSubscriptionPaymentWindowOpen(DateTime.now()) ?? false;
     final isKycApproved = profile.kycStatus == KycStatus.approved;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('FrappedDollars'),
+        title: Text(branding.appName),
         actions: [
           IconButton(
             icon: const Icon(Icons.logout),
@@ -252,7 +254,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 Expanded(
                   child: ElevatedButton.icon(
                     onPressed: () {
-                      Share.share('Rejoins-moi sur FrappedDollars ! Utilise mon code : $code');
+                      final appName = context.read<AppSettingsProvider>().settings.appName;
+                      Share.share('Rejoins-moi sur $appName ! Utilise mon code : $code');
                     },
                     icon: const Icon(Icons.share, size: 18),
                     label: const Text('PARTAGER'),

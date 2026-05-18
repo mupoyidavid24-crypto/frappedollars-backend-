@@ -34,12 +34,13 @@ class Profile {
   });
 
   factory Profile.fromJson(Map<String, dynamic> json) {
+    final rawDateOfBirth = json['date_of_birth'] ?? json['dob'] ?? json['birth_date'];
     return Profile(
       id: json['id'],
       email: json['email'],
       fullName: json['full_name'],
       phoneNumber: json['phone_number'],
-      dateOfBirth: json['date_of_birth'] != null ? DateTime.tryParse(json['date_of_birth'].toString()) : null,
+      dateOfBirth: rawDateOfBirth != null ? DateTime.tryParse(rawDateOfBirth.toString()) : null,
       kycStatus: _parseKycStatus(json['kyc_status']),
       kycBlocked: json['kyc_blocked'] ?? true,
       role: _parseRole(json['role']),

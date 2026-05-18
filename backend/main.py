@@ -19,7 +19,7 @@ import requests
 
 from backend.admin_routes import router as admin_router
 from backend.ea_generator import router as ea_router
-from backend.config import supabase, get_current_admin, _supabase_user_from_jwt, get_business_rules_payload
+from backend.config import get_app_settings_payload, supabase, get_current_admin, _supabase_user_from_jwt, get_business_rules_payload
 from backend.error_reporting import record_error_log, report_exception
 from backend.storage import SQLiteStorage, hash_api_key, utc_now
 
@@ -45,7 +45,7 @@ allowed_origins = [
     origin.strip()
     for origin in os.getenv(
         "CORS_ALLOW_ORIGINS",
-        "http://localhost:3000,http://localhost:5000,http://localhost:8080,https://frappe-dollars.web.app,https://frappedollars.netlify.app",
+        "http://localhost:3000,http://localhost:5000,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:5000,http://127.0.0.1:8080,https://frappe-dollars.web.app,https://frappedollars.netlify.app",
     ).split(",")
     if origin.strip()
 ]
@@ -744,6 +744,11 @@ def ping() -> dict[str, str]:
 @app.get("/business/rules")
 def business_rules() -> dict[str, Any]:
     return get_business_rules_payload()
+
+
+@app.get("/app/settings")
+def app_settings() -> dict[str, Any]:
+    return get_app_settings_payload()
 
 
 @app.get("/monitoring")

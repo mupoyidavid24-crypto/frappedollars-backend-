@@ -29,7 +29,7 @@ class SupabaseService {
   }
 
   Future<void> signOut() async {
-    await _client.auth.signOut();
+    await _client.auth.signOut(scope: SignOutScope.local);
   }
 
   User? get currentUser => _client.auth.currentUser;
@@ -41,7 +41,16 @@ class SupabaseService {
         await _client.from('profiles').select().eq('id', userId).maybeSingle();
 
     if (response == null) return null;
-    return Profile.fromJson(response);
+    final merged = Map<String, dynamic>.from(response);
+    final currentUser = _client.auth.currentUser;
+    final metadata = currentUser?.userMetadata;
+    if (merged['date_of_birth'] == null && metadata != null) {
+      final metaDateOfBirth = metadata['date_of_birth'];
+      if (metaDateOfBirth != null && metaDateOfBirth.toString().trim().isNotEmpty) {
+        merged['date_of_birth'] = metaDateOfBirth;
+      }
+    }
+    return Profile.fromJson(merged);
   }
 
   // -- TRADING ACCOUNTS --

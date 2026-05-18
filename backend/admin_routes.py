@@ -8,7 +8,14 @@ import requests
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from backend.config import get_business_rules_payload, get_current_admin, supabase, upsert_business_rules_payload
+from backend.config import (
+    get_app_settings_payload,
+    get_business_rules_payload,
+    get_current_admin,
+    supabase,
+    upsert_app_settings_payload,
+    upsert_business_rules_payload,
+)
 from backend.error_reporting import report_exception
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -30,6 +37,16 @@ class BusinessRulesUpdatePayload(BaseModel):
     currency: str | None = None
     copy_trading_weekly_price: float | None = None
     vps_monthly_price: float | None = None
+
+
+class AppSettingsUpdatePayload(BaseModel):
+    app_name: str | None = None
+    tagline: str | None = None
+    logo_url: str | None = None
+    primary_color_hex: str | None = None
+    background_color_hex: str | None = None
+    support_email: str | None = None
+    support_phone: str | None = None
 
 
 class PaymentMethodPayload(BaseModel):
@@ -66,6 +83,18 @@ def read_business_rules(admin=Depends(get_current_admin)):
 def update_business_rules(payload: BusinessRulesUpdatePayload, admin=Depends(get_current_admin)):
     admin_id = str(admin.get("id") or "")
     return upsert_business_rules_payload(payload.model_dump(exclude_none=True), updated_by=admin_id or None)
+
+
+@router.get("/app-settings")
+def read_app_settings(admin=Depends(get_current_admin)):
+    del admin
+    return get_app_settings_payload()
+
+
+@router.put("/app-settings")
+def update_app_settings(payload: AppSettingsUpdatePayload, admin=Depends(get_current_admin)):
+    admin_id = str(admin.get("id") or "")
+    return upsert_app_settings_payload(payload.model_dump(exclude_none=True), updated_by=admin_id or None)
 
 
 @router.get("/payment-methods")

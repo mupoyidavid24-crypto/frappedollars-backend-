@@ -17,7 +17,7 @@ class BioAuthService {
   Future<bool> authenticate() async {
     try {
       return await _auth.authenticate(
-        localizedReason: 'Veuillez vous authentifier pour accéder à FrappedDollars',
+        localizedReason: 'Veuillez vous authentifier pour continuer',
         options: const AuthenticationOptions(
           stickyAuth: true,
           biometricOnly: true,
