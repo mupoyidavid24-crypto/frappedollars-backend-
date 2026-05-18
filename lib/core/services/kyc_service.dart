@@ -29,7 +29,6 @@ class KycService {
       type: FileType.custom,
       allowedExtensions: const ['jpg', 'jpeg', 'png', 'pdf'],
       withData: true,
-      withReadStream: true,
       allowMultiple: false,
     );
 
@@ -77,7 +76,10 @@ class KycService {
     await _client.storage.from('kyc-documents').uploadBinary(
       storagePath,
       bytes,
-      fileOptions: FileOptions(contentType: _contentTypeForFile(document.name)),
+      fileOptions: FileOptions(
+        contentType: _contentTypeForFile(document.name),
+        upsert: true,
+      ),
     );
 
     await _client.from('kyc_documents').insert({

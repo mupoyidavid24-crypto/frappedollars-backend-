@@ -50,7 +50,10 @@ class PaymentUploadService {
     final uploadedPath = await supabase.storage.from('proofs').uploadBinary(
       storagePath,
       bytes,
-      fileOptions: FileOptions(contentType: _contentTypeForFile(file.name)),
+      fileOptions: FileOptions(
+        contentType: _contentTypeForFile(file.name),
+        upsert: true,
+      ),
     );
 
     if (uploadedPath.isNotEmpty) {

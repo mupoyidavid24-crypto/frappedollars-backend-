@@ -62,7 +62,6 @@ class _PaymentFormState extends State<PaymentForm> {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.image,
         withData: true,
-        withReadStream: true,
         allowMultiple: false,
       );
       if (result == null || result.files.isEmpty) {
