@@ -38,8 +38,8 @@ void main() async {
       url: AppConstants.supabaseUrl,
       anonKey: AppConstants.supabaseAnonKey,
       authOptions: const FlutterAuthClientOptions(
-        autoRefreshToken: false,
-        detectSessionInUri: false,
+        autoRefreshToken: true,
+        detectSessionInUri: true,
       ),
     );
   } catch (e) {
