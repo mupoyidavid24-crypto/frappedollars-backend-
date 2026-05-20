@@ -41,14 +41,23 @@ app = FastAPI(title="FrappedDollars Backend", version="2.1.0")
 app.include_router(ea_router)
 app.include_router(admin_router)
 
-allowed_origins = [
+default_origins = {
+    "http://localhost:3000",
+    "http://localhost:5000",
+    "http://localhost:8080",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5000",
+    "http://127.0.0.1:8080",
+    "https://frappe-dollars.web.app",
+    "https://frappedollars.web.app",
+    "https://frappedollars.netlify.app",
+}
+configured_origins = {
     origin.strip()
-    for origin in os.getenv(
-        "CORS_ALLOW_ORIGINS",
-        "http://localhost:3000,http://localhost:5000,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:5000,http://127.0.0.1:8080,https://frappe-dollars.web.app,https://frappedollars.netlify.app",
-    ).split(",")
+    for origin in os.getenv("CORS_ALLOW_ORIGINS", "").split(",")
     if origin.strip()
-]
+}
+allowed_origins = sorted(default_origins | configured_origins)
 
 app.add_middleware(
     CORSMiddleware,
