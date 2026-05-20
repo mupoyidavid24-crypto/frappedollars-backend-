@@ -102,9 +102,14 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> signOut() async {
-    await _supabaseService.signOut();
-    _userProfile = null;
-    notifyListeners();
+    try {
+      await _supabaseService.signOut();
+    } catch (e) {
+      debugPrint('Sign out warning: $e');
+    } finally {
+      _userProfile = null;
+      notifyListeners();
+    }
   }
 
   void _setLoading(bool value) {

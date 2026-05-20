@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../constants/constants.dart';
 import '../../models/profile_model.dart';
@@ -29,7 +30,11 @@ class SupabaseService {
   }
 
   Future<void> signOut() async {
-    await _client.auth.signOut(scope: SignOutScope.local);
+    try {
+      await _client.auth.signOut(scope: SignOutScope.local);
+    } catch (e) {
+      debugPrint('Supabase signOut warning: $e');
+    }
   }
 
   User? get currentUser => _client.auth.currentUser;

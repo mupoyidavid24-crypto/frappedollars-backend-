@@ -1,8 +1,13 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AdminAuth {
   static Future<void> logout() async {
-    await Supabase.instance.client.auth.signOut(scope: SignOutScope.local);
+    try {
+      await Supabase.instance.client.auth.signOut(scope: SignOutScope.local);
+    } catch (e) {
+      debugPrint('Admin logout warning: $e');
+    }
   }
 
   static Map<String, String> headers({bool jsonContent = false}) {
