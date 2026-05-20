@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import os
 from typing import Any
+import traceback
 
 from decimal import Decimal
 import requests
@@ -33,15 +34,22 @@ def _extract_bearer_token(authorization: str | None) -> str | None:
 
 
 def _supabase_user_from_jwt(access_token: str) -> dict[str, Any]:
-    response = requests.get(
-        f"{SUPABASE_URL.rstrip('/')}/auth/v1/user",
-        headers={
-            "apikey": SUPABASE_ANON_KEY,
-            "Authorization": f"Bearer {access_token}",
-            "Accept": "application/json",
-        },
-        timeout=15,
-    )
+    try:
+        response = requests.get(
+            f"{SUPABASE_URL.rstrip('/')}/auth/v1/user",
+            headers={
+                "apikey": SUPABASE_ANON_KEY,
+                "Authorization": f"Bearer {access_token}",
+                "Accept": "application/json",
+            },
+            timeout=15,
+        )
+    except requests.RequestException as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Impossible de joindre Supabase Auth pour verifier la session.",
+        ) from exc
+
     if response.status_code != 200:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -57,33 +65,43 @@ def _supabase_user_from_jwt(access_token: str) -> dict[str, Any]:
 
 
 def get_current_admin(authorization: str | None = Header(default=None)):
-    access_token = _extract_bearer_token(authorization)
-    if not access_token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Jeton Supabase requis.",
-        )
+    try:
+        access_token = _extract_bearer_token(authorization)
+        if not access_token:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Jeton Supabase requis.",
+            )
 
-    auth_user = _supabase_user_from_jwt(access_token)
-    profile = (
-        supabase.table("profiles")
-        .select("id, email, full_name, role, is_vip, needs_vps")
-        .eq("id", auth_user["id"])
-        .maybe_single()
-        .execute()
-    )
-    profile_row = profile.data or {}
-    if not profile_row:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Profil Supabase introuvable.",
+        auth_user = _supabase_user_from_jwt(access_token)
+        profile = (
+            supabase.table("profiles")
+            .select("id, email, full_name, role, is_vip, needs_vps")
+            .eq("id", auth_user["id"])
+            .maybe_single()
+            .execute()
         )
-    if str(profile_row.get("role") or "").upper() != "ADMIN":
+        profile_row = profile.data or {}
+        if not profile_row:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Profil Supabase introuvable.",
+            )
+        if str(profile_row.get("role") or "").upper() != "ADMIN":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acces admin refuse.",
+            )
+        return profile_row
+    except HTTPException:
+        raise
+    except Exception as exc:
+        print("[ADMIN_AUTH] unexpected error:")
+        print(traceback.format_exc())
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Acces admin refuse.",
-        )
-    return profile_row
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Verification de session admin indisponible.",
+        ) from exc
 
 
 BUSINESS_RULE_DEFAULTS: dict[str, object] = {

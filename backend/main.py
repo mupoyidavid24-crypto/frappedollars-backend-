@@ -170,6 +170,17 @@ def _extract_bearer_token(authorization: str | None) -> str | None:
     return authorization.strip() or None
 
 
+def _extract_mt5_api_key(x_api_key: str | None = None, authorization: str | None = None) -> str | None:
+    if x_api_key and x_api_key.strip():
+        return x_api_key.strip()
+    if authorization:
+        token = _extract_bearer_token(authorization)
+        if token:
+            return token
+        return authorization.strip() or None
+    return None
+
+
 def _supabase_rest_headers(access_token: str | None) -> dict[str, str]:
     api_key = SUPABASE_ANON_KEY
     if not SUPABASE_URL or not api_key:
@@ -538,6 +549,7 @@ def admin_dashboard_summary(
 
 
 def _verify_ea_api_key(mt5_login: str, provided_api_key: str | None, expected_role: str) -> dict[str, Any]:
+    mt5_login = mt5_login.strip()
     if not provided_api_key:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -676,9 +688,11 @@ def report_error(payload: ErrorLogPayload, x_api_key: str | None = Header(defaul
             authorized = True
         except HTTPException:
             authorized = False
-    elif payload.mt5_login and payload.account_role and x_api_key:
-        _verify_ea_api_key(payload.mt5_login, x_api_key, expected_role=payload.account_role)
-        authorized = True
+    else:
+        api_key = _extract_mt5_api_key(x_api_key=x_api_key, authorization=authorization)
+        if payload.mt5_login and payload.account_role and api_key:
+            _verify_ea_api_key(payload.mt5_login, api_key, expected_role=payload.account_role)
+            authorized = True
 
     if not authorized:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Autorisation invalide.")
@@ -817,8 +831,9 @@ def client_pending_trades(
     limit: int = Query(default=20, ge=1, le=100),
     wait_ms: int = Query(default=100, ge=0, le=2000),
     x_api_key: str | None = Header(default=None),
+    authorization: str | None = Header(default=None),
 ) -> dict[str, Any]:
-    _verify_ea_api_key(mt5_login, x_api_key, expected_role="CLIENT")
+    _verify_ea_api_key(mt5_login, _extract_mt5_api_key(x_api_key=x_api_key, authorization=authorization), expected_role="CLIENT")
     storage.requeue_stale_dispatches(mt5_login, DISPATCH_LEASE_SECONDS)
     deadline = time.monotonic() + (wait_ms / 1000.0)
     items = storage.claim_dispatches(mt5_login, limit)
@@ -833,8 +848,9 @@ def client_pending_trades(
 def trade_executed(
     payload: TradeExecutedPayload,
     x_api_key: str | None = Header(default=None),
+    authorization: str | None = Header(default=None),
 ) -> dict[str, Any]:
-    _verify_ea_api_key(payload.client_login, x_api_key, expected_role="CLIENT")
+    _verify_ea_api_key(payload.client_login, _extract_mt5_api_key(x_api_key=x_api_key, authorization=authorization), expected_role="CLIENT")
 
     row = storage.update_dispatch_status(
         trade_id=payload.trade_id,
@@ -874,8 +890,9 @@ def trade_executed(
 def trade_failed(
     payload: TradeFailedPayload,
     x_api_key: str | None = Header(default=None),
+    authorization: str | None = Header(default=None),
 ) -> dict[str, Any]:
-    _verify_ea_api_key(payload.client_login, x_api_key, expected_role="CLIENT")
+    _verify_ea_api_key(payload.client_login, _extract_mt5_api_key(x_api_key=x_api_key, authorization=authorization), expected_role="CLIENT")
 
     row = storage.update_dispatch_status(
         trade_id=payload.trade_id,

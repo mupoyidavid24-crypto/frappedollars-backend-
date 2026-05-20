@@ -27,6 +27,8 @@ def hash_api_key(api_key: str) -> str:
 
 
 def derive_api_key(mt5_login: str, account_role: str) -> str:
+    mt5_login = mt5_login.strip()
+    account_role = account_role.strip().upper()
     digest = hmac.new(
         API_KEY_SECRET.encode("utf-8"),
         f"{mt5_login}:{account_role}".encode("utf-8"),
@@ -192,6 +194,8 @@ class SQLiteStorage:
             conn.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_def}")
 
     def issue_api_key(self, mt5_login: str, account_role: str) -> dict[str, str]:
+        mt5_login = mt5_login.strip()
+        account_role = account_role.strip().upper()
         plain_api_key = derive_api_key(mt5_login, account_role)
         now = utc_now()
         with self._lock, self.connection() as conn:
@@ -210,6 +214,7 @@ class SQLiteStorage:
         return {"mt5_login": mt5_login, "account_role": account_role, "api_key": plain_api_key}
 
     def get_api_key_record(self, mt5_login: str) -> dict[str, Any] | None:
+        mt5_login = mt5_login.strip()
         with self.connection() as conn:
             row = conn.execute(
                 "SELECT mt5_login, account_role, api_key_hash, is_active FROM ea_api_keys WHERE mt5_login = ? LIMIT 1",
