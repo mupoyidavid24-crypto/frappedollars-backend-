@@ -103,6 +103,8 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Widget _buildHeroPanel(AppSettings branding) {
+    final logoUrl = branding.logoUrl?.trim();
+
     return Container(
       constraints: const BoxConstraints(minHeight: 420),
       padding: const EdgeInsets.all(28),
@@ -135,11 +137,11 @@ class _LoginScreenState extends State<LoginScreen> {
                   borderRadius: BorderRadius.circular(16),
                 ),
                 padding: const EdgeInsets.all(8),
-                child: branding.logoUrl != null && branding.logoUrl!.isNotEmpty
+                child: logoUrl?.isNotEmpty == true
                     ? ClipRRect(
                         borderRadius: BorderRadius.circular(12),
                         child: Image.network(
-                          branding.logoUrl!,
+                          logoUrl!,
                           fit: BoxFit.cover,
                           errorBuilder: (_, __, ___) => Image.asset('web/icons/frappe logo.png', fit: BoxFit.contain),
                         ),

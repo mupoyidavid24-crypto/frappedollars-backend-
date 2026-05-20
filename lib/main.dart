@@ -127,21 +127,22 @@ class _AuthWrapperState extends State<AuthWrapper> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (!_initialized) {
-      _checkAuth();
       _initialized = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+        context.read<AuthProvider>().initializeAuth();
+      });
     }
-  }
-
-  Future<void> _checkAuth() async {
-    // Utiliser microtask pour éviter les erreurs de build pendant l'initialisation
-    Future.microtask(() => context.read<AuthProvider>().initializeAuth());
   }
 
   @override
   Widget build(BuildContext context) {
     final authProvider = context.watch<AuthProvider>();
+    final profile = authProvider.userProfile;
 
-    if (authProvider.isLoading && authProvider.userProfile == null) {
+    if (authProvider.isLoading && profile == null) {
       return const Scaffold(
         body: Center(
           child: CircularProgressIndicator(
@@ -151,11 +152,11 @@ class _AuthWrapperState extends State<AuthWrapper> {
       );
     }
 
-    if (authProvider.userProfile != null) {
-      if (authProvider.userProfile!.role.name.toUpperCase() == 'ADMIN') {
+    if (profile != null) {
+      if (profile.role == UserRole.admin) {
         return const modern_admin.AdminDashboardScreen();
       }
-      if (AppConstants.kycRequired && authProvider.userProfile!.kycStatus != KycStatus.approved) {
+      if (AppConstants.kycRequired && profile.kycStatus != KycStatus.approved) {
         return const KycScreen();
       }
       return const MainNavigationScreen();
