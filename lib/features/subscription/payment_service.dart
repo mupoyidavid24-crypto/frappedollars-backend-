@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../../core/constants/constants.dart';
 import '../../core/features/payments/payment_form.dart';
 
 class PaymentService {
@@ -20,11 +22,9 @@ class PaymentService {
     final profile = profileResponse;
     final kycStatus = (profile?['kyc_status']?.toString() ?? 'PENDING').toUpperCase();
     final kycBlocked = profile?['kyc_blocked'] ?? true;
-    if (kycStatus != 'APPROVED' || kycBlocked == true) {
+    if (AppConstants.kycRequired && (kycStatus != 'APPROVED' || kycBlocked == true)) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('KYC requis avant tout paiement de copy trading.')),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('KYC temporairement désactivé.')));
       }
       return;
     }

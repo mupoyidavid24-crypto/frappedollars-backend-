@@ -1,28 +1,9 @@
-import 'dart:typed_data';
-
+import 'package:flutter/foundation.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class KycService {
   final SupabaseClient _client = Supabase.instance.client;
-
-  Future<Uint8List?> _resolveBytes(PlatformFile file) async {
-    final directBytes = file.bytes;
-    if (directBytes != null) {
-      return directBytes;
-    }
-
-    final stream = file.readStream;
-    if (stream == null) {
-      return null;
-    }
-
-    final builder = BytesBuilder();
-    await for (final chunk in stream) {
-      builder.add(chunk);
-    }
-    return builder.takeBytes();
-  }
 
   Future<PlatformFile?> pickDocument() async {
     final result = await FilePicker.platform.pickFiles(
@@ -36,7 +17,7 @@ class KycService {
       return null;
     }
 
-    return result.files.first;
+    return result.files.single;
   }
 
   String _contentTypeForFile(String fileName) {
@@ -65,22 +46,36 @@ class KycService {
     String? documentNumber,
     required PlatformFile document,
   }) async {
-    final Uint8List? bytes = await _resolveBytes(document);
-    if (bytes == null) {
-      throw Exception('Le fichier KYC est vide.');
+    final Uint8List? rawBytes = document.bytes;
+    if (rawBytes == null || rawBytes.isEmpty) {
+      throw Exception('Le fichier KYC est vide ou illisible.');
     }
+    final Uint8List bytes = document.bytes!;
 
     final safeFileName = document.name.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
     final storagePath = '$userId/${DateTime.now().millisecondsSinceEpoch}_$safeFileName';
+    final contentType = _contentTypeForFile(document.name);
 
-    await _client.storage.from('kyc-documents').uploadBinary(
-      storagePath,
-      bytes,
-      fileOptions: FileOptions(
-        contentType: _contentTypeForFile(document.name),
-        upsert: true,
-      ),
+    debugPrint(
+      'KYC upload start bucket=kyc-documents path=$storagePath file=${document.name} size=${bytes.length} contentType=$contentType',
     );
+
+    try {
+      final uploadedPath = await _client.storage.from('kyc-documents').uploadBinary(
+        storagePath,
+        bytes,
+        fileOptions: FileOptions(
+          contentType: contentType,
+          upsert: true,
+        ),
+      );
+
+      debugPrint('KYC upload success bucket=kyc-documents path=$uploadedPath');
+    } catch (error, stackTrace) {
+      debugPrint('KYC upload failed bucket=kyc-documents path=$storagePath error=$error');
+      debugPrint('$stackTrace');
+      rethrow;
+    }
 
     await _client.from('kyc_documents').insert({
       'user_id': userId,

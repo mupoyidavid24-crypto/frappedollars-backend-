@@ -114,7 +114,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final branding = context.watch<AppSettingsProvider>().settings;
     final businessRules = dashboardProvider.businessRules;
     final isPaymentWindowOpen = businessRules?.isSubscriptionPaymentWindowOpen(DateTime.now()) ?? false;
-    final isKycApproved = profile.kycStatus == KycStatus.approved;
+    final isKycApproved = !AppConstants.kycRequired || profile.kycStatus == KycStatus.approved;
 
     return Scaffold(
       appBar: AppBar(
@@ -146,7 +146,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               isPaymentWindowOpen,
             ),
             const SizedBox(height: 24),
-            if (!isKycApproved) _buildKycPrompt(context),
+            if (AppConstants.kycRequired && !isKycApproved) _buildKycPrompt(context),
             if (!isKycApproved) const SizedBox(height: 24),
             if (dashboardProvider.account == null)
               _buildConnectMT5Button()
@@ -342,7 +342,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               title: const Text('Abonnement Copy Trading'),
               subtitle: Text(
                 !kycApproved
-                    ? 'KYC requis avant activation'
+                    ? 'KYC temporairement désactivé'
                     : isActive
                         ? 'Actif'
                         : (sub?.status.name == 'weekly_limit_reached' ? profitLimitLabel : 'Inactif ou expiré'),
@@ -361,7 +361,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               const Padding(
                 padding: EdgeInsets.only(top: 8.0),
                 child: Text(
-                  'Votre dossier KYC doit être approuvé avant toute activation.',
+                  'Le KYC reste accessible, mais il ne bloque plus l\'activation pour le moment.',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: Colors.orangeAccent),
                 ),
@@ -433,17 +433,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
             const ListTile(
               contentPadding: EdgeInsets.zero,
               leading: Icon(Icons.verified_user_outlined, color: Colors.orange),
-              title: Text('Vérification requise'),
-              subtitle: Text('Le copy trading reste bloqué tant que le KYC n\'est pas approuvé.'),
+              title: Text('Vérification KYC'),
+              subtitle: Text('Le module KYC reste disponible pour réactivation future.'),
             ),
             const SizedBox(height: 8),
             ElevatedButton(
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const KycScreen()),
-                );
-              },
-              child: const Text('Compléter le KYC'),
+              onPressed: AppConstants.kycRequired
+                  ? () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const KycScreen()),
+                      );
+                    }
+                  : null,
+              child: Text(AppConstants.kycRequired ? 'Compléter le KYC' : 'KYC temporairement désactivé'),
             ),
           ],
         ),

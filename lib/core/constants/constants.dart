@@ -1,4 +1,6 @@
 class AppConstants {
+  static const bool kycRequired = false;
+
   static const String backendBaseUrl = String.fromEnvironment(
     'FRAPPEDOLLARS_BACKEND_BASE_URL',
     defaultValue: 'https://frappedollars-backend-1.onrender.com',

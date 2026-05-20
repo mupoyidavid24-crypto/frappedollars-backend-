@@ -155,7 +155,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
       if (authProvider.userProfile!.role.name.toUpperCase() == 'ADMIN') {
         return const modern_admin.AdminDashboardScreen();
       }
-      if (authProvider.userProfile!.kycStatus != KycStatus.approved) {
+      if (AppConstants.kycRequired && authProvider.userProfile!.kycStatus != KycStatus.approved) {
         return const KycScreen();
       }
       return const MainNavigationScreen();

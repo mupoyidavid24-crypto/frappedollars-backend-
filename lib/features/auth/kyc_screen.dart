@@ -152,6 +152,7 @@ class _KycScreenState extends State<KycScreen> {
       KycStatus.pending => 'Votre dossier est en cours de vérification.',
       KycStatus.notSubmitted => 'Complétez la vérification KYC pour activer le copy trading.',
     };
+    final isKycTemporarilyDisabled = !AppConstants.kycRequired;
 
     return Scaffold(
       appBar: AppBar(
@@ -198,7 +199,9 @@ class _KycScreenState extends State<KycScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      statusMessage,
+                      isKycTemporarilyDisabled
+                          ? 'Le KYC est temporairement désactivé. Vous pouvez utiliser l\'application sans soumettre de document.'
+                          : statusMessage,
                       style: const TextStyle(color: Colors.white70),
                     ),
                     const SizedBox(height: 12),
@@ -285,22 +288,26 @@ class _KycScreenState extends State<KycScreen> {
               ),
               const SizedBox(height: 16),
               OutlinedButton.icon(
-                onPressed: _pickDocument,
+                onPressed: isKycTemporarilyDisabled ? null : _pickDocument,
                 icon: const Icon(Icons.upload_file),
                 label: Text(
-                  _pickedDocument == null
-                      ? 'Joindre une pièce d\'identité'
-                      : 'Fichier sélectionné',
+                  isKycTemporarilyDisabled
+                      ? 'KYC temporairement désactivé'
+                      : _pickedDocument == null
+                          ? 'Joindre une pièce d\'identité'
+                          : 'Fichier sélectionné',
                 ),
               ),
               const SizedBox(height: 12),
               Text(
-                'Le fichier doit être lisible et correspondre à votre identité. L\'accès au copy trading reste bloqué tant que le statut n\'est pas approuvé.',
+                isKycTemporarilyDisabled
+                    ? 'Aucun envoi n\'est nécessaire pour le moment. Le module KYC est conservé pour réactivation future.'
+                    : 'Le fichier doit être lisible et correspondre à votre identité. L\'accès au copy trading reste bloqué tant que le statut n\'est pas approuvé.',
                 style: TextStyle(color: Colors.white.withOpacity(0.7)),
               ),
               const SizedBox(height: 24),
               ElevatedButton(
-                onPressed: _isSubmitting ? null : _submit,
+                onPressed: _isSubmitting || isKycTemporarilyDisabled ? null : _submit,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(AppConstants.primaryColor),
                   foregroundColor: Colors.white,
@@ -312,7 +319,7 @@ class _KycScreenState extends State<KycScreen> {
                         width: 20,
                         child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                       )
-                    : const Text('Soumettre le KYC'),
+                    : Text(isKycTemporarilyDisabled ? 'KYC désactivé temporairement' : 'Soumettre le KYC'),
               ),
             ],
           ),

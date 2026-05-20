@@ -3,7 +3,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/constants/constants.dart';
 import '../../core/services/business_rules_service.dart';
 import '../../models/business_rules_model.dart';
-import '../auth/kyc_screen.dart';
 import 'dashboard_screen.dart';
 
 class SetupScreen extends StatefulWidget {
@@ -45,13 +44,9 @@ class _SetupScreenState extends State<SetupScreen> {
       final profile = profileResponse;
       final kycStatus = (profile?['kyc_status']?.toString() ?? 'PENDING').toUpperCase();
       final kycBlocked = profile?['kyc_blocked'] ?? true;
-      if (kycStatus != 'APPROVED' || kycBlocked == true) {
+      if (AppConstants.kycRequired && (kycStatus != 'APPROVED' || kycBlocked == true)) {
         if (!mounted) return;
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const KycScreen()),
-        );
-        return;
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('KYC temporairement désactivé.')));
       }
 
       await Supabase.instance.client

@@ -171,21 +171,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Phase 1: identité de base et vérification d\'âge. Phase 2: KYC obligatoire avant le copy trading.',
+                  'Phase 1: identité de base. Le KYC reste disponible, mais il n\'est plus bloquant pour l\'accès à l\'app.',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: Colors.white70),
                 ),
                 const SizedBox(height: 32),
-                TextField(
-                  controller: _fullNameController,
-                  textCapitalization: TextCapitalization.words,
-                  decoration: InputDecoration(
-                    labelText: 'Nom complet',
-                    prefixIcon: const Icon(Icons.badge_outlined),
-                    filled: true,
-                    fillColor: Colors.white,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
+                Text(
+                  'Vous devez avoir au moins $_minimumAge ans. Le KYC peut être complété plus tard sans bloquer l\'accès initial.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.white70, fontSize: 12),
                 ),
                 const SizedBox(height: 16),
                 TextField(

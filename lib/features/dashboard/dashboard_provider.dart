@@ -178,7 +178,7 @@ class DashboardProvider extends ChangeNotifier {
       final profile = profileResponse;
       final kycStatus = (profile?['kyc_status']?.toString() ?? 'PENDING').toUpperCase();
       final kycBlocked = profile?['kyc_blocked'] ?? true;
-      if (kycStatus != 'APPROVED' || kycBlocked == true) {
+      if (AppConstants.kycRequired && (kycStatus != 'APPROVED' || kycBlocked == true)) {
         throw Exception('KYC_REQUIRED');
       }
 
