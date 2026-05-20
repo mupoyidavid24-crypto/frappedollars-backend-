@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import hmac
 import os
+import re
 import time
 import traceback
 from datetime import datetime, timedelta, timezone
@@ -58,11 +59,24 @@ configured_origins = {
     if origin.strip()
 }
 allowed_origins = sorted(default_origins | configured_origins)
+allowed_origin_regex = re.compile(r"https://.*\.(netlify\.app|web\.app|firebaseapp\.com)")
+
+
+def _cors_headers_for_origin(origin: str | None) -> dict[str, str]:
+    if not origin:
+        return {}
+    if origin in allowed_origins or allowed_origin_regex.fullmatch(origin):
+        return {
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Credentials": "true",
+            "Vary": "Origin",
+        }
+    return {}
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
-    allow_origin_regex=r"https://.*\.(netlify\.app|web\.app|firebaseapp\.com)",
+    allow_origin_regex=allowed_origin_regex.pattern,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -363,7 +377,12 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
             "path": request.url.path,
         },
     )
-    return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content={"detail": "Erreur interne du serveur."})
+    response = JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"detail": "Erreur interne du serveur."},
+    )
+    response.headers.update(_cors_headers_for_origin(request.headers.get("origin")))
+    return response
 
 
 @app.get("/admin/dashboard/summary")
