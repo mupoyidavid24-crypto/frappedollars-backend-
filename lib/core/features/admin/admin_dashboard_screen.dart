@@ -1,8 +1,5 @@
-import 'dart:convert';
-
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
 
@@ -57,7 +54,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       _safeFetch(AdminUsersService.fetchUsers),
       _safeFetch(AdminPaymentMethodsService.fetchPaymentMethods),
       _safeFetch(AdminVpsService.fetchAssignments),
-      _safeFetchMap(_fetchDashboardSummary),
     ]);
 
     final payments = List<Map<String, dynamic>>.from(results[0] as List);
@@ -69,15 +65,21 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     final adminUsers = List<Map<String, dynamic>>.from(results[6] as List);
     final paymentMethods = List<Map<String, dynamic>>.from(results[7] as List);
     final vpsAssignments = List<Map<String, dynamic>>.from(results[8] as List);
-    final summary = Map<String, dynamic>.from(results[9] as Map);
+    final effectiveSummary = _buildLocalSummary(
+      payments: payments,
+      notifications: notifications,
+      vipUsers: vipUsers,
+      adminUsers: adminUsers,
+      copytradingHistory: copytradingHistory,
+    );
 
-    final usersSummary = Map<String, dynamic>.from(summary['users'] as Map? ?? {});
-    final accountsSummary = Map<String, dynamic>.from(summary['accounts'] as Map? ?? {});
-    final paymentsSummary = Map<String, dynamic>.from(summary['payments'] as Map? ?? {});
-    final copytradingSummary = Map<String, dynamic>.from(summary['copytrading'] as Map? ?? {});
-    final activitySummary = Map<String, dynamic>.from(summary['activity'] as Map? ?? {});
+    final usersSummary = Map<String, dynamic>.from(effectiveSummary['users'] as Map? ?? {});
+    final accountsSummary = Map<String, dynamic>.from(effectiveSummary['accounts'] as Map? ?? {});
+    final paymentsSummary = Map<String, dynamic>.from(effectiveSummary['payments'] as Map? ?? {});
+    final copytradingSummary = Map<String, dynamic>.from(effectiveSummary['copytrading'] as Map? ?? {});
+    final activitySummary = Map<String, dynamic>.from(effectiveSummary['activity'] as Map? ?? {});
     final recentUsers = adminUsers;
-    final recentCopytrades = List<Map<String, dynamic>>.from(summary['recent_copytrades'] as List? ?? const []);
+    final recentCopytrades = List<Map<String, dynamic>>.from(effectiveSummary['recent_copytrades'] as List? ?? const []);
 
     final pendingPayments = payments.where((item) => _statusOf(item) == 'EN_ATTENTE').length;
     final validatedPayments = payments.where((item) => _statusOf(item) == 'VALIDATED').length;
@@ -128,23 +130,80 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
-  Future<BusinessRules?> _fetchBusinessRules() {
-    return BusinessRulesService.instance.fetchBusinessRules(forceRefresh: true);
+  Map<String, dynamic> _buildLocalSummary({
+    required List<Map<String, dynamic>> payments,
+    required List<Map<String, dynamic>> notifications,
+    required List<Map<String, dynamic>> vipUsers,
+    required List<Map<String, dynamic>> adminUsers,
+    required List<Map<String, dynamic>> copytradingHistory,
+  }) {
+    final totalAccounts = adminUsers.fold<int>(0, (total, user) {
+      final accounts = user['trading_accounts'];
+      if (accounts is List) {
+        return total + accounts.length;
+      }
+      return total;
+    });
+    final activeAccounts = adminUsers.fold<int>(0, (total, user) {
+      final active = user['active_trading_accounts'];
+      if (active is int) {
+        return total + active;
+      }
+      return total;
+    });
+    final inactiveAccounts = totalAccounts - activeAccounts;
+    final pendingPayments = payments.where((item) => _statusOf(item) == 'PENDING_VALIDATION' || _statusOf(item) == 'EN_ATTENTE').length;
+    final validatedPayments = payments.where((item) => _statusOf(item) == 'VALIDATED' || _statusOf(item) == 'APPROVED').length;
+    final refusedPayments = payments.where((item) => _statusOf(item) == 'REFUSED' || _statusOf(item) == 'REJECTED').length;
+    final totalPaymentAmount = payments.fold<double>(0.0, (total, item) => total + _asDouble(item['amount']));
+
+    return {
+      'users': {
+        'total': adminUsers.length,
+        'active': adminUsers.where((user) => (user['role']?.toString().toUpperCase() ?? '') != 'SUSPENDED').length,
+        'suspended': adminUsers.where((user) => (user['role']?.toString().toUpperCase() ?? '') == 'SUSPENDED').length,
+        'vip': vipUsers.length,
+        'with_mt5': adminUsers.where((user) {
+          final mt5Logins = user['mt5_logins'];
+          return mt5Logins is List && mt5Logins.isNotEmpty;
+        }).length,
+      },
+      'accounts': {
+        'total': totalAccounts,
+        'active': activeAccounts,
+        'inactive': inactiveAccounts,
+        'master': adminUsers.where((user) => (user['role']?.toString().toUpperCase() ?? '') == 'MASTER').length,
+        'client': adminUsers.where((user) => (user['role']?.toString().toUpperCase() ?? '') == 'CLIENT').length,
+      },
+      'payments': {
+        'total': payments.length,
+        'pending': pendingPayments,
+        'validated': validatedPayments,
+        'refused': refusedPayments,
+        'amount_total': totalPaymentAmount,
+      },
+      'copytrading': {
+        'signals_total': copytradingHistory.length,
+        'copied_total': copytradingHistory.length,
+        'executed': copytradingHistory.where((item) => _statusOf(item) == 'EXECUTED').length,
+        'failed': copytradingHistory.where((item) => _statusOf(item) == 'FAILED').length,
+        'pending': copytradingHistory.where((item) => _statusOf(item) == 'PENDING').length,
+        'retry': copytradingHistory.where((item) => _statusOf(item) == 'RETRY').length,
+        'average_latency_ms': 0.0,
+        'dispatch_pipeline': <String, dynamic>{},
+      },
+      'activity': {
+        'notifications': notifications.length,
+        'support_tickets': 0,
+        'open_tickets': 0,
+        'signals': copytradingHistory.length,
+      },
+      'recent_copytrades': copytradingHistory.take(10).toList(),
+    };
   }
 
-  Future<Map<String, dynamic>> _fetchDashboardSummary() async {
-    final response = await http.get(
-      Uri.parse('${AppConstants.adminBaseUrl}/dashboard/summary'),
-      headers: AdminAuth.headers(),
-    );
-    if (response.statusCode == 200) {
-      final decoded = json.decode(response.body);
-      if (decoded is Map<String, dynamic>) {
-        return decoded;
-      }
-      return Map<String, dynamic>.from(decoded as Map);
-    }
-    throw Exception('Erreur chargement synthèse admin');
+  Future<BusinessRules?> _fetchBusinessRules() {
+    return BusinessRulesService.instance.fetchBusinessRules(forceRefresh: true);
   }
 
   Future<List<Map<String, dynamic>>> _safeFetch(Future<List<Map<String, dynamic>>> Function() fetcher) async {
@@ -152,14 +211,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       return await fetcher();
     } catch (_) {
       return <Map<String, dynamic>>[];
-    }
-  }
-
-  Future<Map<String, dynamic>> _safeFetchMap(Future<Map<String, dynamic>> Function() fetcher) async {
-    try {
-      return await fetcher();
-    } catch (_) {
-      return <String, dynamic>{};
     }
   }
 

@@ -93,21 +93,21 @@ class MyApp extends StatelessWidget {
       initialRoute: _initialRoute(),
       routes: {
         '/': (context) => const AuthWrapper(),
-        '/admin': (context) => const modern_admin.AdminDashboardScreen(),
+        '/admin': (context) => const AdminRouteGate(child: modern_admin.AdminDashboardScreen()),
         '/admin/login': (context) => const AdminLoginScreen(),
         '/admin/dashboard': (context) =>
-            const modern_admin.AdminDashboardScreen(),
-        '/admin/api-keys': (context) => const AdminApiKeysScreen(),
-        '/admin/users': (context) => const AdminUsersScreen(),
-        '/admin/vps': (context) => const AdminVpsScreen(),
-        '/admin/payment-methods': (context) => const AdminPaymentMethodsScreen(),
-        '/admin/branding': (context) => const AdminBrandingScreen(),
-        '/admin/payments': (context) => const AdminPaymentsScreen(),
-        '/admin/notifications': (context) => const AdminNotificationsScreen(),
-        '/admin/vip': (context) => const AdminVIPScreen(),
-        '/admin/copytrading': (context) => const AdminCopyTradingScreen(),
-        '/admin/kyc': (context) => const AdminKycScreen(),
-        '/admin/logs': (context) => const AdminLogsScreen(),
+            const AdminRouteGate(child: modern_admin.AdminDashboardScreen()),
+        '/admin/api-keys': (context) => const AdminRouteGate(child: AdminApiKeysScreen()),
+        '/admin/users': (context) => const AdminRouteGate(child: AdminUsersScreen()),
+        '/admin/vps': (context) => const AdminRouteGate(child: AdminVpsScreen()),
+        '/admin/payment-methods': (context) => const AdminRouteGate(child: AdminPaymentMethodsScreen()),
+        '/admin/branding': (context) => const AdminRouteGate(child: AdminBrandingScreen()),
+        '/admin/payments': (context) => const AdminRouteGate(child: AdminPaymentsScreen()),
+        '/admin/notifications': (context) => const AdminRouteGate(child: AdminNotificationsScreen()),
+        '/admin/vip': (context) => const AdminRouteGate(child: AdminVIPScreen()),
+        '/admin/copytrading': (context) => const AdminRouteGate(child: AdminCopyTradingScreen()),
+        '/admin/kyc': (context) => const AdminRouteGate(child: AdminKycScreen()),
+        '/admin/logs': (context) => const AdminRouteGate(child: AdminLogsScreen()),
       },
     );
   }
@@ -121,26 +121,20 @@ class AuthWrapper extends StatefulWidget {
 }
 
 class _AuthWrapperState extends State<AuthWrapper> {
-  bool _initialized = false;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (!_initialized) {
-      _initialized = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) {
-          return;
-        }
-        context.read<AuthProvider>().initializeAuth();
-      });
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final authProvider = context.watch<AuthProvider>();
     final profile = authProvider.userProfile;
+
+    if (!authProvider.authReady) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(
+            color: Color(AppConstants.primaryColor),
+          ),
+        ),
+      );
+    }
 
     if (authProvider.isLoading && profile == null) {
       return const Scaffold(
@@ -163,5 +157,41 @@ class _AuthWrapperState extends State<AuthWrapper> {
     } else {
       return const LoginScreen();
     }
+  }
+}
+
+class AdminRouteGate extends StatelessWidget {
+  const AdminRouteGate({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final authProvider = context.watch<AuthProvider>();
+    final profile = authProvider.userProfile;
+
+    if (!authProvider.authReady) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(
+            color: Color(AppConstants.primaryColor),
+          ),
+        ),
+      );
+    }
+
+    if (profile == null) {
+      return const AdminLoginScreen();
+    }
+
+    if (profile.role != UserRole.admin) {
+      return const Scaffold(
+        body: Center(
+          child: Text('Acces admin refuse.'),
+        ),
+      );
+    }
+
+    return child;
   }
 }

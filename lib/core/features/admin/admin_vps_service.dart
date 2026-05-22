@@ -1,29 +1,36 @@
-import 'dart:convert';
-
-import 'package:http/http.dart' as http;
-
-import '../../constants/constants.dart';
-import 'admin_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AdminVpsService {
-  static String get baseUrl => AppConstants.adminBaseUrl;
+  static SupabaseClient get _client => Supabase.instance.client;
 
   static Future<List<Map<String, dynamic>>> fetchAssignments() async {
-    final response = await http.get(
-      Uri.parse('$baseUrl/vps/assignments'),
-      headers: AdminAuth.headers(),
-    );
+    final assignments = List<Map<String, dynamic>>.from(await _client
+        .from('vps_assignments')
+        .select('id, user_id, status, provider, host_label, notes, last_heartbeat, last_restart_requested_at, created_at, updated_at')
+        .order('updated_at', ascending: false));
+    final assignmentIds = assignments
+        .map((item) => item['user_id'])
+        .whereType<String>()
+        .toList();
 
-    if (response.statusCode != 200) {
-      throw Exception('Erreur chargement VPS');
+    if (assignmentIds.isEmpty) {
+      return assignments;
     }
 
-    final decoded = json.decode(response.body);
-    if (decoded is List) {
-      return decoded.map((item) => Map<String, dynamic>.from(item as Map)).toList();
-    }
+    final profilesResponse = List<Map<String, dynamic>>.from(await _client
+        .from('profiles')
+        .select('id, email, full_name')
+        .inFilter('id', assignmentIds));
 
-    return const [];
+    final profilesById = {
+      for (final item in profilesResponse) item['id']?.toString() ?? '': item,
+    };
+
+    return assignments.map((assignment) {
+      final userId = assignment['user_id']?.toString() ?? '';
+      assignment['profile'] = profilesById[userId] ?? <String, dynamic>{};
+      return assignment;
+    }).toList();
   }
 
   static Future<void> updateAssignment(
@@ -33,19 +40,20 @@ class AdminVpsService {
     String? hostLabel,
     String? notes,
   }) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/vps/assignments/$userId/action'),
-      headers: AdminAuth.headers(jsonContent: true),
-      body: json.encode({
-        'status': status,
-        'provider': provider,
-        'host_label': hostLabel,
-        'notes': notes,
-      }),
-    );
+    final payload = {
+      'user_id': userId,
+      'status': status,
+      'provider': provider,
+      'host_label': hostLabel,
+      'notes': notes,
+    };
 
-    if (response.statusCode != 200) {
-      throw Exception('Erreur mise à jour VPS');
+    final existing = await _client.from('vps_assignments').select('id').eq('user_id', userId).maybeSingle();
+    if (existing != null && existing['id'] != null) {
+      await _client.from('vps_assignments').update(payload).eq('user_id', userId);
+      return;
     }
+
+    await _client.from('vps_assignments').insert(payload);
   }
 }

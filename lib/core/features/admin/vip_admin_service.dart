@@ -1,29 +1,23 @@
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import '../../constants/constants.dart';
-import 'admin_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class VIPAdminService {
-  static String get baseUrl => AppConstants.adminBaseUrl;
+  static SupabaseClient get _client => Supabase.instance.client;
 
   static Future<List<Map<String, dynamic>>> fetchVIPUsers() async {
-    final response = await http.get(Uri.parse('$baseUrl/users'), headers: AdminAuth.headers());
-    if (response.statusCode == 200) {
-      return List<Map<String, dynamic>>.from(json.decode(response.body).where((u) => u['is_vip'] == true));
-    } else {
-      throw Exception('Erreur chargement VIP');
-    }
+    final response = await _client
+        .from('profiles')
+        .select('id, email, full_name, is_vip, created_at, total_profit')
+        .eq('is_vip', true)
+        .order('created_at', ascending: false);
+    return (response as List).map((item) => Map<String, dynamic>.from(item as Map)).toList();
   }
 
   static Future<bool> toggleVIP(String userId, bool isVIP) async {
-    final url = isVIP ? '$baseUrl/add_vip_client' : '$baseUrl/block_user/$userId';
-    final response = isVIP
-        ? await http.post(
-            Uri.parse(url),
-            body: json.encode({'id': userId}),
-            headers: AdminAuth.headers(jsonContent: true),
-          )
-        : await http.post(Uri.parse(url), headers: AdminAuth.headers());
-    return response.statusCode == 200;
+    if (isVIP) {
+      await _client.from('profiles').update({'is_vip': true, 'role': 'VIP'}).eq('id', userId);
+    } else {
+      await _client.from('profiles').update({'is_vip': false, 'role': 'CLIENT'}).eq('id', userId);
+    }
+    return true;
   }
 }

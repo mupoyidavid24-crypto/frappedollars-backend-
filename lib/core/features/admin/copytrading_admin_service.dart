@@ -1,26 +1,23 @@
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import '../../constants/constants.dart';
-import 'admin_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class CopyTradingAdminService {
-  static String get baseUrl => AppConstants.adminBaseUrl;
+  static SupabaseClient get _client => Supabase.instance.client;
 
   static Future<bool> toggleCopyTrading(String clientId) async {
-    final response = await http.post(Uri.parse('$baseUrl/sync_with_master/$clientId'), headers: AdminAuth.headers());
-    return response.statusCode == 200;
+    await _client.from('trading_accounts').update({'master_account_id': null}).eq('user_id', clientId);
+    return true;
   }
 
   static Future<List<Map<String, dynamic>>> fetchHistory() async {
-    final response = await http.get(Uri.parse('$baseUrl/copytrading/history'), headers: AdminAuth.headers());
-    if (response.statusCode == 200) {
-      final decoded = json.decode(response.body);
-      if (decoded is Map && decoded['items'] is List) {
-        return List<Map<String, dynamic>>.from(decoded['items'] as List);
-      }
-      return List<Map<String, dynamic>>.from(decoded as List);
-    } else {
-      throw Exception('Erreur chargement historique');
+    try {
+      final response = await _client
+          .from('copied_trades')
+          .select('id, signal_id, client_account_id, volume_executed, execution_status, profit, error_message, created_at, closed_at')
+          .order('created_at', ascending: false)
+          .limit(100);
+      return (response as List).map((item) => Map<String, dynamic>.from(item as Map)).toList();
+    } catch (_) {
+      return const <Map<String, dynamic>>[];
     }
   }
 }

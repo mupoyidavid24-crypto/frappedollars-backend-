@@ -582,11 +582,18 @@ def _verify_ea_api_key(mt5_login: str, provided_api_key: str | None, expected_ro
 
 
 def _require_admin_key(x_admin_key: str | None = Header(default=None)) -> str:
-    del x_admin_key
-    raise HTTPException(
-        status_code=status.HTTP_410_GONE,
-        detail="La cle admin partagee est desactivee. Utilisez un compte Supabase avec le role ADMIN.",
-    )
+    expected_admin_key = os.getenv("ADMIN_API_KEY")
+    if not expected_admin_key:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="ADMIN_API_KEY n'est pas configuree sur le backend.",
+        )
+    if not x_admin_key or x_admin_key != expected_admin_key:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Cle admin invalide.",
+        )
+    return x_admin_key
 
 
 def _subscription_payment_window_open() -> bool:
@@ -935,6 +942,36 @@ def generate_api_key(
     result = storage.issue_api_key(payload.mt5_login, payload.account_role)
     print(f"[API_KEY] issued mt5_login={payload.mt5_login} role={payload.account_role}")
     return result
+
+
+@app.post("/admin/promote_profile")
+def promote_profile(
+    payload: dict[str, str],
+    admin_key: str = Depends(_require_admin_key),
+) -> dict[str, Any]:
+    del admin_key
+    email = str(payload.get("email") or "").strip().lower()
+    if not email:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email admin manquant.")
+
+    result = (
+        supabase.table("profiles")
+        .update({"role": "ADMIN", "updated_at": utc_now()})
+        .eq("email", email)
+        .execute()
+    )
+    if not result.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profil Supabase introuvable.")
+
+    profile = (
+        supabase.table("profiles")
+        .select("id, email, full_name, role, updated_at")
+        .eq("email", email)
+        .maybe_single()
+        .execute()
+        .data
+    )
+    return {"status": "ok", "profile": profile}
 
 
 @app.get("/admin/trade_dispatches")

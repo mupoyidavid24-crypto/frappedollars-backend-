@@ -1,58 +1,34 @@
-import 'dart:convert';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'package:http/http.dart' as http;
-
-import '../../constants/constants.dart';
 import '../../../models/business_rules_model.dart';
-import 'admin_auth.dart';
 
 class AdminBusinessRulesService {
-  static String get baseUrl => AppConstants.adminBaseUrl;
+  static SupabaseClient get _client => Supabase.instance.client;
 
   static Future<BusinessRules> fetchBusinessRules() async {
-    final response = await http.get(
-      Uri.parse('$baseUrl/business-rules'),
-      headers: AdminAuth.headers(),
-    );
+    final response = await _client
+        .from('business_rules')
+        .select('id, currency, copy_trading_weekly_price, vps_monthly_price, weekly_profit_limit, weekly_profit_limit_nature, weekly_profit_limit_description, minimum_capital_required, subscription_payment_window_weekdays, updated_at')
+        .order('updated_at', ascending: false)
+        .limit(1)
+        .maybeSingle();
 
-    if (response.statusCode != 200) {
-      throw Exception('Erreur chargement des règles métier');
+    if (response == null) {
+      return BusinessRules.fromJson(const {});
     }
 
-    final decoded = json.decode(response.body);
-    if (decoded is Map<String, dynamic>) {
-      return BusinessRules.fromJson(decoded);
-    }
-    if (decoded is Map) {
-      return BusinessRules.fromJson(Map<String, dynamic>.from(decoded));
-    }
-    throw Exception('Réponse invalide pour les règles métier');
+    return BusinessRules.fromJson(Map<String, dynamic>.from(response as Map));
   }
 
   static Future<bool> updateBusinessRules(Map<String, dynamic> payload) async {
-    final response = await http.put(
-      Uri.parse('$baseUrl/business-rules'),
-      headers: AdminAuth.headers(jsonContent: true),
-      body: jsonEncode(payload),
-    );
+    final current = await _client.from('business_rules').select('id').order('updated_at', ascending: false).limit(1).maybeSingle();
 
-    if (response.statusCode == 200) {
+    if (current != null && current['id'] != null) {
+      await _client.from('business_rules').update(payload).eq('id', current['id']);
       return true;
     }
 
-    final detail = _extractError(response);
-    throw Exception('Erreur mise à jour des règles métier: $detail');
-  }
-
-  static String _extractError(http.Response response) {
-    try {
-      final decoded = json.decode(response.body);
-      if (decoded is Map && decoded.containsKey('detail')) {
-        return decoded['detail'].toString();
-      }
-    } catch (_) {
-      // ignore
-    }
-    return response.body;
+    await _client.from('business_rules').insert(payload);
+    return true;
   }
 }
