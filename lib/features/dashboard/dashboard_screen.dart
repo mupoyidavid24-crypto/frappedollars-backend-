@@ -114,7 +114,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final branding = context.watch<AppSettingsProvider>().settings;
     final businessRules = dashboardProvider.businessRules;
     final isPaymentWindowOpen = businessRules?.isSubscriptionPaymentWindowOpen(DateTime.now()) ?? false;
-    final isKycApproved = !AppConstants.kycRequired || profile.kycStatus == KycStatus.approved;
 
     return Scaffold(
       appBar: AppBar(
@@ -141,13 +140,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
             _buildStatusCard(
               dashboardProvider.subscription,
               profile.needsVps,
-              profile.kycStatus,
               businessRules,
               isPaymentWindowOpen,
             ),
             const SizedBox(height: 24),
-            if (AppConstants.kycRequired && !isKycApproved) _buildKycPrompt(context),
-            if (!isKycApproved) const SizedBox(height: 24),
             if (dashboardProvider.account == null)
               _buildConnectMT5Button()
             else ...[
@@ -315,12 +311,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildStatusCard(
     Subscription? sub,
     bool needsVps,
-    KycStatus kycStatus,
     BusinessRules? businessRules,
     bool isPaymentWindowOpen,
   ) {
     final isActive = sub?.status.name == 'active' || sub?.status.name == 'manual_active';
-    final kycApproved = kycStatus == KycStatus.approved;
     final copyTradingPrice = businessRules?.copyTradingWeeklyPrice.toStringAsFixed(0) ?? '--';
     final vpsPrice = businessRules?.vpsMonthlyPrice.toStringAsFixed(0) ?? '--';
     final profitLimitLabel =
@@ -341,11 +335,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
               title: const Text('Abonnement Copy Trading'),
               subtitle: Text(
-                !kycApproved
-                    ? 'KYC temporairement désactivé'
-                    : isActive
-                        ? 'Actif'
-                        : (sub?.status.name == 'weekly_limit_reached' ? profitLimitLabel : 'Inactif ou expiré'),
+                isActive
+                    ? 'Actif'
+                    : (sub?.status.name == 'weekly_limit_reached' ? profitLimitLabel : 'Inactif ou expiré'),
               ),
             ),
             if (businessRules != null)
@@ -357,16 +349,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   style: const TextStyle(color: Colors.white70, fontSize: 12),
                 ),
               ),
-            if (!kycApproved)
-              const Padding(
-                padding: EdgeInsets.only(top: 8.0),
-                child: Text(
-                  'Le KYC reste accessible, mais il ne bloque plus l\'activation pour le moment.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.orangeAccent),
-                ),
-              ),
-            if (kycApproved && !isActive && sub?.status.name != 'weekly_limit_reached')
+            if (!isActive && sub?.status.name != 'weekly_limit_reached')
               Padding(
                 padding: const EdgeInsets.only(top: 8.0),
                 child: ElevatedButton(
@@ -391,7 +374,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 ),
               ),
-            if (kycApproved && needsVps && !isActive)
+            if (needsVps && !isActive)
                Padding(
                 padding: const EdgeInsets.only(top: 8.0),
                 child: ElevatedButton(
@@ -416,37 +399,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 ),
               ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildKycPrompt(BuildContext context) {
-    return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: Icon(Icons.verified_user_outlined, color: Colors.orange),
-              title: Text('Vérification KYC'),
-              subtitle: Text('Le module KYC reste disponible pour réactivation future.'),
-            ),
-            const SizedBox(height: 8),
-            ElevatedButton(
-              onPressed: AppConstants.kycRequired
-                  ? () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => const KycScreen()),
-                      );
-                    }
-                  : null,
-              child: Text(AppConstants.kycRequired ? 'Compléter le KYC' : 'KYC temporairement désactivé'),
-            ),
           ],
         ),
       ),

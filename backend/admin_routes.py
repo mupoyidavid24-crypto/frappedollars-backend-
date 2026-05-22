@@ -3,10 +3,12 @@ from __future__ import annotations
 import os
 from datetime import datetime, timedelta, timezone
 from typing import Any
+from uuid import UUID
 
 import requests
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
+from postgrest.exceptions import APIError
 
 from backend.config import (
     get_app_settings_payload,
@@ -432,9 +434,67 @@ def suspend_user(user_id: str, admin=Depends(get_current_admin), authorization: 
 @router.delete("/users/{user_id}")
 def delete_user(user_id: str, admin=Depends(get_current_admin)):
     del admin
-    deleted = supabase.table("profiles").delete().eq("id", user_id).execute()
+    try:
+        UUID(user_id)
+    except ValueError as exc:
+        report_exception(
+            "admin_routes.delete_user",
+            exc,
+            source="backend",
+            severity="WARNING",
+            details={"route": "/admin/users/{user_id}", "user_id": user_id, "stage": "validate_uuid"},
+        )
+        raise HTTPException(status_code=400, detail="Invalid UUID") from exc
+
+    try:
+        existing = supabase.table("profiles").select("id").eq("id", user_id).limit(1).execute()
+        if not existing.data:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        deleted = supabase.table("profiles").delete().eq("id", user_id).execute()
+    except APIError as exc:
+        error_code = getattr(exc, "code", None)
+        if error_code == "23503":
+            report_exception(
+                "admin_routes.delete_user",
+                exc,
+                source="backend",
+                severity="WARNING",
+                details={"route": "/admin/users/{user_id}", "user_id": user_id, "stage": "fk_constraint"},
+            )
+            raise HTTPException(
+                status_code=409,
+                detail="FK constraint: linked resources still exist.",
+            ) from exc
+        report_exception(
+            "admin_routes.delete_user",
+            exc,
+            source="backend",
+            severity="ERROR",
+            details={"route": "/admin/users/{user_id}", "user_id": user_id, "stage": "delete_profile"},
+        )
+        raise HTTPException(status_code=500, detail="Server error while deleting user") from exc
+    except HTTPException:
+        raise
+    except Exception as exc:
+        report_exception(
+            "admin_routes.delete_user",
+            exc,
+            source="backend",
+            severity="ERROR",
+            details={"route": "/admin/users/{user_id}", "user_id": user_id, "stage": "unexpected"},
+        )
+        raise HTTPException(status_code=500, detail="Server error while deleting user") from exc
+
     if not deleted.data:
-        raise HTTPException(status_code=404, detail="Utilisateur introuvable")
+        report_exception(
+            "admin_routes.delete_user",
+            RuntimeError("Delete returned no data after prior existence check"),
+            source="backend",
+            severity="ERROR",
+            details={"route": "/admin/users/{user_id}", "user_id": user_id, "stage": "post_delete_empty"},
+        )
+        raise HTTPException(status_code=500, detail="Server error while deleting user")
     return {"status": "supprime"}
 
 

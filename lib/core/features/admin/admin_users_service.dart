@@ -69,6 +69,10 @@ class AdminUsersService {
       headers: AdminAuth.headers(),
     );
     if (response.statusCode != 200) {
+      final details = response.body.trim();
+      if (details.isNotEmpty) {
+        throw Exception(details);
+      }
       throw Exception('Erreur suppression utilisateur');
     }
   }

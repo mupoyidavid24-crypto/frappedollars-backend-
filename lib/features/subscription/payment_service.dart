@@ -16,19 +16,10 @@ class PaymentService {
 
     final profileResponse = await client
         .from('profiles')
-        .select('full_name, phone_number, kyc_status, kyc_blocked')
+        .select('full_name, phone_number')
         .eq('id', user.id)
         .maybeSingle();
     final profile = profileResponse;
-    final kycStatus = (profile?['kyc_status']?.toString() ?? 'PENDING').toUpperCase();
-    final kycBlocked = profile?['kyc_blocked'] ?? true;
-    if (AppConstants.kycRequired && (kycStatus != 'APPROVED' || kycBlocked == true)) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('KYC temporairement désactivé.')));
-      }
-      return;
-    }
-
     if (!context.mounted) {
       return;
     }
