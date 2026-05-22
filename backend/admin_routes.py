@@ -21,6 +21,8 @@ from backend.error_reporting import report_exception
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 FCM_SERVER_KEY = os.getenv("FCM_SERVER_KEY")
+SUPABASE_URL = os.getenv("SUPABASE_URL", "")
+SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY") or os.getenv("SUPABASE_KEY", "")
 
 
 class KycStatusUpdatePayload(BaseModel):
@@ -71,6 +73,34 @@ class VpsAssignmentPayload(BaseModel):
     provider: str | None = None
     host_label: str | None = None
     notes: str | None = None
+
+
+def _supabase_admin_headers(authorization: str | None) -> dict[str, str]:
+    if not SUPABASE_URL or not SUPABASE_ANON_KEY:
+        raise HTTPException(status_code=503, detail="Configuration Supabase admin indisponible.")
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Jeton Supabase requis.")
+    return {
+        "apikey": SUPABASE_ANON_KEY,
+        "Authorization": authorization,
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "Prefer": "return=representation",
+    }
+
+
+def _supabase_admin_patch(table: str, authorization: str | None, payload: dict[str, Any], *, user_id: str) -> list[dict[str, Any]]:
+    response = requests.patch(
+        f"{SUPABASE_URL.rstrip('/')}/rest/v1/{table}",
+        headers=_supabase_admin_headers(authorization),
+        params={"id": f"eq.{user_id}"},
+        json=payload,
+        timeout=30,
+    )
+    if response.status_code >= 400:
+        raise HTTPException(status_code=502, detail=f"Supabase {table} mutation failed: {response.text}")
+    decoded = response.json()
+    return decoded if isinstance(decoded, list) else [decoded]
 
 
 @router.get("/business-rules")
@@ -365,7 +395,7 @@ def list_users(admin=Depends(get_current_admin)):
 
 
 @router.post("/users/activate/{user_id}")
-def activate_user(user_id: str, admin=Depends(get_current_admin)):
+def activate_user(user_id: str, admin=Depends(get_current_admin), authorization: str | None = Header(default=None)):
     del admin
     profile = supabase.table("profiles").select("id, is_vip").eq("id", user_id).maybe_single().execute()
     profile_row = profile.data or {}
@@ -373,17 +403,17 @@ def activate_user(user_id: str, admin=Depends(get_current_admin)):
         raise HTTPException(status_code=404, detail="Utilisateur introuvable")
 
     next_role = "VIP" if profile_row.get("is_vip") else "CLIENT"
-    updated = supabase.table("profiles").update({"role": next_role}).eq("id", user_id).execute()
-    if not updated.data:
+    updated = _supabase_admin_patch("profiles", authorization, {"role": next_role}, user_id=user_id)
+    if not updated:
         raise HTTPException(status_code=404, detail="Utilisateur introuvable")
     return {"status": "active", "role": next_role}
 
 
 @router.post("/users/suspend/{user_id}")
-def suspend_user(user_id: str, admin=Depends(get_current_admin)):
+def suspend_user(user_id: str, admin=Depends(get_current_admin), authorization: str | None = Header(default=None)):
     del admin
-    updated = supabase.table("profiles").update({"role": "SUSPENDED"}).eq("id", user_id).execute()
-    if not updated.data:
+    updated = _supabase_admin_patch("profiles", authorization, {"role": "SUSPENDED"}, user_id=user_id)
+    if not updated:
         raise HTTPException(status_code=404, detail="Utilisateur introuvable")
     return {"status": "suspendu"}
 
@@ -454,6 +484,7 @@ def update_kyc_document_status(
     document_id: str,
     payload: KycStatusUpdatePayload,
     admin=Depends(get_current_admin),
+    authorization: str | None = Header(default=None),
 ):
     reviewer_id = admin.get("id")
     status_value = payload.status.strip().upper()
@@ -495,7 +526,7 @@ def update_kyc_document_status(
         raise HTTPException(status_code=404, detail="Document KYC introuvable")
 
     user_id = str(document.get("user_id") or "")
-    supabase.table("profiles").update(profile_update).eq("id", user_id).execute()
+    _supabase_admin_patch("profiles", authorization, profile_update, user_id=user_id)
 
     if status_value == "APPROVED":
         _send_user_notification(
@@ -530,7 +561,7 @@ def update_kyc_document_status(
 
 
 @router.post("/users/{user_id}/vip")
-def set_user_vip(user_id: str, payload: UserVipPayload, admin=Depends(get_current_admin)):
+def set_user_vip(user_id: str, payload: UserVipPayload, admin=Depends(get_current_admin), authorization: str | None = Header(default=None)):
     del admin
     current = supabase.table("profiles").select("role").eq("id", user_id).maybe_single().execute()
     current_row = current.data or {}
@@ -541,22 +572,22 @@ def set_user_vip(user_id: str, payload: UserVipPayload, admin=Depends(get_curren
     if str(current_row.get("role") or "").upper() == "ADMIN":
         raise HTTPException(status_code=403, detail="Impossible de modifier le role d'un ADMIN")
 
-    result = supabase.table("profiles").update({"is_vip": payload.is_vip, "role": next_role}).eq("id", user_id).execute()
-    if not result.data:
+    result = _supabase_admin_patch("profiles", authorization, {"is_vip": payload.is_vip, "role": next_role}, user_id=user_id)
+    if not result:
         raise HTTPException(status_code=404, detail="Utilisateur introuvable")
     return {"status": "updated", "is_vip": payload.is_vip, "role": next_role}
 
 
 @router.post("/users/{user_id}/vps")
-def set_user_vps(user_id: str, payload: UserNeedsVpsPayload, admin=Depends(get_current_admin)):
+def set_user_vps(user_id: str, payload: UserNeedsVpsPayload, admin=Depends(get_current_admin), authorization: str | None = Header(default=None)):
     del admin
     profile_res = supabase.table("profiles").select("id, needs_vps").eq("id", user_id).maybe_single().execute()
     profile = profile_res.data or {}
     if not profile:
         raise HTTPException(status_code=404, detail="Utilisateur introuvable")
 
-    result = supabase.table("profiles").update({"needs_vps": payload.needs_vps}).eq("id", user_id).execute()
-    if not result.data:
+    result = _supabase_admin_patch("profiles", authorization, {"needs_vps": payload.needs_vps}, user_id=user_id)
+    if not result:
         raise HTTPException(status_code=404, detail="Utilisateur introuvable")
 
     assignment_payload = {
@@ -611,9 +642,9 @@ def manage_vps_assignment(user_id: str, payload: VpsAssignmentPayload, admin=Dep
 
     supabase.table("vps_assignments").upsert(update_data, on_conflict="user_id").execute()
     if status_value == "CONNECTED":
-        supabase.table("profiles").update({"needs_vps": True}).eq("id", user_id).execute()
+        _supabase_admin_patch("profiles", authorization, {"needs_vps": True}, user_id=user_id)
     elif status_value == "DISCONNECTED":
-        supabase.table("profiles").update({"needs_vps": False}).eq("id", user_id).execute()
+        _supabase_admin_patch("profiles", authorization, {"needs_vps": False}, user_id=user_id)
 
     return {"status": status_value, "user_id": user_id}
 
