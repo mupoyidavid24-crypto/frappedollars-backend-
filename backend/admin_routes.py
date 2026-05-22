@@ -103,6 +103,19 @@ def _supabase_admin_patch(table: str, authorization: str | None, payload: dict[s
     return decoded if isinstance(decoded, list) else [decoded]
 
 
+def _supabase_admin_get(table: str, authorization: str | None, *, user_id: str, select: str) -> list[dict[str, Any]]:
+    response = requests.get(
+        f"{SUPABASE_URL.rstrip('/')}/rest/v1/{table}",
+        headers=_supabase_admin_headers(authorization),
+        params={"select": select, "id": f"eq.{user_id}"},
+        timeout=30,
+    )
+    if response.status_code >= 400:
+        raise HTTPException(status_code=502, detail=f"Supabase {table} query failed: {response.text}")
+    decoded = response.json()
+    return decoded if isinstance(decoded, list) else [decoded]
+
+
 @router.get("/business-rules")
 def read_business_rules(admin=Depends(get_current_admin)):
     del admin
@@ -397,8 +410,8 @@ def list_users(admin=Depends(get_current_admin)):
 @router.post("/users/activate/{user_id}")
 def activate_user(user_id: str, admin=Depends(get_current_admin), authorization: str | None = Header(default=None)):
     del admin
-    profile = supabase.table("profiles").select("id, is_vip").eq("id", user_id).maybe_single().execute()
-    profile_row = profile.data or {}
+    profile_rows = _supabase_admin_get("profiles", authorization, user_id=user_id, select="id, is_vip")
+    profile_row = profile_rows[0] if profile_rows else {}
     if not profile_row:
         raise HTTPException(status_code=404, detail="Utilisateur introuvable")
 
