@@ -516,13 +516,8 @@ def update_kyc_document_status(
         "reviewed_at": datetime.now(timezone.utc).isoformat() if status_value != "PENDING" else None,
     }
 
-    updated_document = (
-        supabase.table("kyc_documents")
-        .update(document_update)
-        .eq("id", document_id)
-        .execute()
-    )
-    if not updated_document.data:
+    updated_document = _supabase_admin_patch("kyc_documents", authorization, document_update, user_id=document_id)
+    if not updated_document:
         raise HTTPException(status_code=404, detail="Document KYC introuvable")
 
     user_id = str(document.get("user_id") or "")
