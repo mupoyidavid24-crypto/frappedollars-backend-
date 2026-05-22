@@ -11,8 +11,6 @@ from dotenv import load_dotenv
 from fastapi import Header, HTTPException, status
 from supabase import create_client
 
-from backend.error_reporting import report_exception
-
 load_dotenv()
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
@@ -104,6 +102,8 @@ def get_current_admin(authorization: str | None = Header(default=None)):
     except Exception as exc:
         print("[ADMIN_AUTH] unexpected error:")
         print(traceback.format_exc())
+        from backend.error_reporting import report_exception
+
         report_exception(
             "config.get_current_admin",
             exc,
