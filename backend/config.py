@@ -11,6 +11,8 @@ from dotenv import load_dotenv
 from fastapi import Header, HTTPException, status
 from supabase import create_client
 
+from backend.error_reporting import report_exception
+
 load_dotenv()
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
@@ -85,7 +87,7 @@ def get_current_admin(authorization: str | None = Header(default=None)):
             .maybe_single()
             .execute()
         )
-        profile_row = profile.data or {}
+        profile_row = getattr(profile, "data", None) or {}
         if not profile_row:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
