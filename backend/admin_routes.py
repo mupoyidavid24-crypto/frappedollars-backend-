@@ -410,24 +410,22 @@ def list_users(admin=Depends(get_current_admin)):
 @router.post("/users/activate/{user_id}")
 def activate_user(user_id: str, admin=Depends(get_current_admin), authorization: str | None = Header(default=None)):
     del admin
-    profile_rows = _supabase_admin_get("profiles", authorization, user_id=user_id, select="id, is_vip")
-    profile_row = profile_rows[0] if profile_rows else {}
-    if not profile_row:
-        raise HTTPException(status_code=404, detail="Utilisateur introuvable")
+    next_role = "CLIENT"
+    try:
+        profile_rows = _supabase_admin_get("profiles", authorization, user_id=user_id, select="is_vip")
+        if profile_rows:
+            next_role = "VIP" if profile_rows[0].get("is_vip") else "CLIENT"
+    except HTTPException:
+        pass
 
-    next_role = "VIP" if profile_row.get("is_vip") else "CLIENT"
-    updated = _supabase_admin_patch("profiles", authorization, {"role": next_role}, user_id=user_id)
-    if not updated:
-        raise HTTPException(status_code=404, detail="Utilisateur introuvable")
+    _supabase_admin_patch("profiles", authorization, {"role": next_role}, user_id=user_id)
     return {"status": "active", "role": next_role}
 
 
 @router.post("/users/suspend/{user_id}")
 def suspend_user(user_id: str, admin=Depends(get_current_admin), authorization: str | None = Header(default=None)):
     del admin
-    updated = _supabase_admin_patch("profiles", authorization, {"role": "SUSPENDED"}, user_id=user_id)
-    if not updated:
-        raise HTTPException(status_code=404, detail="Utilisateur introuvable")
+    _supabase_admin_patch("profiles", authorization, {"role": "SUSPENDED"}, user_id=user_id)
     return {"status": "suspendu"}
 
 
