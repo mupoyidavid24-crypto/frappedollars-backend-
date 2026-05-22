@@ -102,6 +102,14 @@ def get_current_admin(authorization: str | None = Header(default=None)):
     except Exception as exc:
         print("[ADMIN_AUTH] unexpected error:")
         print(traceback.format_exc())
+        report_exception(
+            "config.get_current_admin",
+            exc,
+            source="backend",
+            details={
+                "has_authorization": bool(authorization),
+            },
+        )
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Verification de session admin indisponible.",

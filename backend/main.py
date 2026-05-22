@@ -939,9 +939,30 @@ def generate_api_key(
     admin=Depends(get_current_admin),
 ) -> dict[str, str]:
     del admin
-    result = storage.issue_api_key(payload.mt5_login, payload.account_role)
-    print(f"[API_KEY] issued mt5_login={payload.mt5_login} role={payload.account_role}")
-    return result
+    print(f"[API_KEY] request mt5_login={payload.mt5_login} role={payload.account_role}")
+    try:
+        result = storage.issue_api_key(payload.mt5_login, payload.account_role)
+        print(f"[API_KEY] issued mt5_login={payload.mt5_login} role={payload.account_role}")
+        return result
+    except Exception as exc:
+        print(
+            f"[API_KEY] failed mt5_login={payload.mt5_login} role={payload.account_role} "
+            f"type={exc.__class__.__name__} error={exc}"
+        )
+        print(traceback.format_exc())
+        report_exception(
+            "main.generate_api_key",
+            exc,
+            source="backend",
+            details={
+                "mt5_login": payload.mt5_login,
+                "account_role": payload.account_role,
+            },
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Impossible de generer la cle API.",
+        ) from exc
 
 
 @app.post("/admin/promote_profile")
