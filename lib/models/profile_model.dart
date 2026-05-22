@@ -53,7 +53,7 @@ class Profile {
   }
 
   static UserRole _parseRole(String? role) {
-    switch (role?.toUpperCase()) {
+    switch (role?.trim().toUpperCase()) {
       case 'ADMIN':
         return UserRole.admin;
       case 'MASTER':

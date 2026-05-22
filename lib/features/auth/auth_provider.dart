@@ -79,6 +79,7 @@ class AuthProvider extends ChangeNotifier {
     _setLoading(true);
     try {
       _userProfile = await _supabaseService.getUserProfile(user.id);
+      debugPrint('Supabase auth sync: profile loaded user=${_userProfile?.id ?? 'none'} role=${_userProfile?.role.name.toUpperCase() ?? 'none'}');
     } catch (e) {
       debugPrint("Init Auth Error: $e");
     } finally {

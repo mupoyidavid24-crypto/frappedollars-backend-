@@ -14,9 +14,9 @@ class VIPAdminService {
 
   static Future<bool> toggleVIP(String userId, bool isVIP) async {
     if (isVIP) {
-      await _client.from('profiles').update({'is_vip': true, 'role': 'VIP'}).eq('id', userId);
+      await _client.from('profiles').update({'is_vip': true}).eq('id', userId);
     } else {
-      await _client.from('profiles').update({'is_vip': false, 'role': 'CLIENT'}).eq('id', userId);
+      await _client.from('profiles').update({'is_vip': false}).eq('id', userId);
     }
     return true;
   }
