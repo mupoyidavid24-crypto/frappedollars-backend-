@@ -1,5 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'admin_supabase_queries.dart';
+
 class ErrorAdminService {
   static SupabaseClient get _client => Supabase.instance.client;
 
@@ -7,7 +9,7 @@ class ErrorAdminService {
     try {
       final response = await _client
           .from('errors_logs')
-          .select('id, source, component, severity, message, details, user_id, mt5_login, trade_id, created_at')
+          .select(AdminSupabaseQueries.errorLogsSelect)
           .order('created_at', ascending: false)
           .limit(100);
       if (response is List) {

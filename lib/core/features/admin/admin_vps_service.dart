@@ -1,12 +1,14 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'admin_supabase_queries.dart';
+
 class AdminVpsService {
   static SupabaseClient get _client => Supabase.instance.client;
 
   static Future<List<Map<String, dynamic>>> fetchAssignments() async {
     final assignments = List<Map<String, dynamic>>.from(await _client
         .from('vps_assignments')
-        .select('id, user_id, status, provider, host_label, notes, last_heartbeat, last_restart_requested_at, created_at, updated_at')
+      .select(AdminSupabaseQueries.vpsAssignmentsSelect)
         .order('updated_at', ascending: false));
     final assignmentIds = assignments
         .map((item) => item['user_id'])

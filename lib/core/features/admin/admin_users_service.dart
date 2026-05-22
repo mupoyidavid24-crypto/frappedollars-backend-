@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../constants/constants.dart';
 import 'admin_auth.dart';
+import 'admin_supabase_queries.dart';
 
 class AdminUsersService {
   static SupabaseClient get _client => Supabase.instance.client;
@@ -10,12 +11,12 @@ class AdminUsersService {
   static Future<List<Map<String, dynamic>>> fetchUsers() async {
     final profilesResponse = await _client
         .from('profiles')
-        .select('id, email, full_name, phone_number, date_of_birth, kyc_status, kyc_blocked, role, is_vip, needs_vps, created_at')
+        .select(AdminSupabaseQueries.profilesSelect)
         .order('created_at', ascending: false);
     final accountsResponse = await _client
         .from('trading_accounts')
-      .select('id, user_id, mt5_login, account_type, is_active, created_at')
-        .order('created_at', ascending: false);
+        .select(AdminSupabaseQueries.tradingAccountsSelect)
+        .order('user_id', ascending: false);
 
     final accountsByUserId = <String, List<Map<String, dynamic>>>{};
     for (final item in accountsResponse as List) {

@@ -1,5 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'admin_supabase_queries.dart';
+
 class PaymentAdminService {
   static SupabaseClient get _client => Supabase.instance.client;
 
@@ -7,7 +9,7 @@ class PaymentAdminService {
   static Future<List<Map<String, dynamic>>> fetchPayments() async {
     final response = await _client
         .from('payments')
-        .select('id, client, payment_type, payment_status, amount, recipient_number, proof_url, created_at, reviewer_id, reviewed_at, review_reason')
+      .select(AdminSupabaseQueries.paymentsSelect)
         .order('created_at', ascending: false);
     return (response as List).map((item) => Map<String, dynamic>.from(item as Map)).toList();
   }
