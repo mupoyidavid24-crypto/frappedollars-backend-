@@ -263,12 +263,7 @@ def sync_with_master(client_id: str, admin=Depends(get_current_admin)):
     if not master_acc.data:
         raise HTTPException(status_code=404, detail="Compte master introuvable")
 
-    updated = (
-        supabase.table("trading_accounts")
-        .update({"master_account_id": master_acc.data[0]["id"]})
-        .eq("user_id", client_id)
-        .execute()
-    )
+    updated = supabase.table("trading_accounts").update({"is_active": True}).eq("user_id", client_id).execute()
     if not updated.data:
         raise HTTPException(status_code=404, detail="Compte client introuvable")
     return {"status": "Synchronise avec master"}
@@ -277,7 +272,7 @@ def sync_with_master(client_id: str, admin=Depends(get_current_admin)):
 @router.get("/copytrading/status/{client_id}")
 def get_copytrading_status(client_id: str, admin=Depends(get_current_admin)):
     del admin
-    acc = supabase.table("trading_accounts").select("is_active, master_account_id").eq("user_id", client_id).execute()
+    acc = supabase.table("trading_accounts").select("is_active").eq("user_id", client_id).execute()
     if not acc.data:
         raise HTTPException(status_code=404, detail="Compte client introuvable")
     return acc.data[0]
@@ -333,7 +328,7 @@ def list_users(admin=Depends(get_current_admin)):
         )
         accounts = (
             supabase.table("trading_accounts")
-            .select("id, user_id, mt5_login, account_type, is_active, master_account_id, created_at")
+            .select("id, user_id, mt5_login, account_type, is_active, created_at")
             .order("created_at", desc=True)
             .execute()
         )

@@ -4,7 +4,7 @@ class CopyTradingAdminService {
   static SupabaseClient get _client => Supabase.instance.client;
 
   static Future<bool> toggleCopyTrading(String clientId) async {
-    await _client.from('trading_accounts').update({'master_account_id': null}).eq('user_id', clientId);
+    await _client.from('trading_accounts').update({'is_active': true}).eq('user_id', clientId);
     return true;
   }
 

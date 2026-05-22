@@ -14,7 +14,7 @@ class AdminUsersService {
         .order('created_at', ascending: false);
     final accountsResponse = await _client
         .from('trading_accounts')
-        .select('id, user_id, mt5_login, account_type, is_active, master_account_id, created_at')
+      .select('id, user_id, mt5_login, account_type, is_active, created_at')
         .order('created_at', ascending: false);
 
     final accountsByUserId = <String, List<Map<String, dynamic>>>{};
