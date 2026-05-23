@@ -61,6 +61,11 @@ configured_origins = {
 allowed_origins = sorted(default_origins | configured_origins)
 allowed_origin_regex = re.compile(r"https://.*\.(netlify\.app|web\.app|firebaseapp\.com)")
 
+PAYMENT_METHOD_BY_DESTINATION = {
+    "0856425342": "Orange Money",
+    "0977338230": "Airtel Money",
+}
+
 
 def _cors_headers_for_origin(origin: str | None) -> dict[str, str]:
     if not origin:
@@ -72,6 +77,17 @@ def _cors_headers_for_origin(origin: str | None) -> dict[str, str]:
             "Vary": "Origin",
         }
     return {}
+
+
+def _payment_method_for_destination(destination_number: str) -> str:
+    digits = re.sub(r"\D", "", destination_number)
+    if digits in PAYMENT_METHOD_BY_DESTINATION:
+        return PAYMENT_METHOD_BY_DESTINATION[digits]
+    if digits.startswith("085"):
+        return "Orange Money"
+    if digits.startswith("097"):
+        return "Airtel Money"
+    return "Orange Money"
 
 app.add_middleware(
     CORSMiddleware,
@@ -628,12 +644,14 @@ def manual_payment_request(payload: ManualPaymentRequestPayload, authorization: 
     if not profile_response.data:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Utilisateur introuvable.")
 
+    payment_method = _payment_method_for_destination(payload.destination_number)
+
     inserted = supabase.table("payments").insert(
         {
             "client": payload.user_id,
             "amount": payload.amount,
             "montant": payload.amount,
-            "moyen": "Mobile Money",
+            "moyen": payment_method,
             "numero": payload.payer_phone,
             "recipient_number": payload.destination_number,
             "proof_url": payload.proof_url,
