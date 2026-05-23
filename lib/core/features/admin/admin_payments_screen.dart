@@ -323,7 +323,7 @@ class _PaymentCard extends StatelessWidget {
           Text('Type: ${payment['payment_type'] ?? 'n/a'}', style: const TextStyle(color: Colors.white70)),
           Text('Moyen: ${payment['moyen'] ?? 'Mobile Money'}', style: const TextStyle(color: Colors.white70)),
           Text('Numéro utilisé: ${payment['payer_phone'] ?? payment['numero'] ?? 'n/a'}', style: const TextStyle(color: Colors.white70)),
-          Text('Numéro destinataire: ${payment['destination_number'] ?? 'n/a'}', style: const TextStyle(color: Colors.white70)),
+          Text('Numéro destinataire: ${payment['recipient_number'] ?? payment['destination_number'] ?? 'n/a'}', style: const TextStyle(color: Colors.white70)),
           Text('Date: ${payment['date'] ?? payment['created_at'] ?? 'n/a'}', style: const TextStyle(color: Colors.white70)),
           if ((payment['proof_url'] ?? payment['preuve']) != null) ...[
             const SizedBox(height: 8),

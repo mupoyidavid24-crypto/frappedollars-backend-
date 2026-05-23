@@ -420,7 +420,7 @@ def admin_dashboard_summary(
     payments = _supabase_rest_get(
         "payments",
         access_token,
-        select="id, client, payment_type, payment_status, amount, montant, moyen, numero, payer_phone, destination_number, proof_url, preuve, statut, date, created_at, motif, review_reason",
+        select="id, client, payment_type, payment_status, amount, montant, moyen, numero, payer_phone, recipient_number, proof_url, preuve, statut, date, created_at, motif, review_reason",
         order="created_at.desc.nullslast",
         limit=200,
     )
@@ -636,7 +636,7 @@ def manual_payment_request(payload: ManualPaymentRequestPayload, authorization: 
             "moyen": "Mobile Money",
             "numero": payload.payer_phone,
             "payer_phone": payload.payer_phone,
-            "destination_number": payload.destination_number,
+            "recipient_number": payload.destination_number,
             "proof_url": payload.proof_url,
             "preuve": payload.proof_url,
             "payment_type": payload.payment_type,

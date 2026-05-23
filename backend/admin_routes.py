@@ -732,7 +732,7 @@ def list_payments(admin=Depends(get_current_admin)):
     del admin
     try:
         res = supabase.table("payments").select(
-            "id, client, payment_type, payment_status, montant, amount, moyen, numero, payer_phone, destination_number, preuve, proof_url, statut, date, created_at, motif, review_reason, reviewer_id, reviewed_at"
+            "id, client, payment_type, payment_status, montant, amount, moyen, numero, payer_phone, recipient_number, preuve, proof_url, statut, date, created_at, motif, review_reason, reviewer_id, reviewed_at"
         ).execute()
         return res.data or []
     except Exception as exc:
